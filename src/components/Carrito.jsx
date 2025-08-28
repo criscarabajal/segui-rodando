@@ -30,13 +30,16 @@ export default function Carrito({
   setComentario,         // ← viene del padre
   pedidoNumero,
   setPedidoNumero,
-  onClearAll
+  onClearAll,
+  // 🔹 grupo actual (día/etiqueta) controlado por el padre
+  grupoActual,
+  setGrupoActual
 }) {
   const [discount, setDiscount] = useState('0');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [openIncludes, setOpenIncludes] = useState(false);
   const [serialMap, setSerialMap] = useState({});
-  const [massJornadas, setMassJornadas] = useState(''); // ✅ valor para aplicar a todas
+  const [massJornadas, setMassJornadas] = useState(''); // para aplicar a todas
 
   // Guardar descuento
   useEffect(() => {
@@ -138,7 +141,7 @@ export default function Carrito({
         {/* Comentario arriba de todo */}
         <TextField
           size="small"
-          placeholder="Comentario…"
+          placeholder="Comentario… (ej: Lunes)"
           value={comentario}
           onChange={(e) => setComentario(e.target.value)}
           sx={{
@@ -152,6 +155,21 @@ export default function Carrito({
           inputProps={{ maxLength: 200 }}
         />
 
+        {/* ✅ Botón Aceptar: fija grupo y limpia el input */}
+        <Button
+          variant="contained"
+          size="small"
+          onClick={() => {
+            const v = (comentario || '').trim();
+            if (!v) return;
+            setGrupoActual(v);   // fija el “día/etiqueta” actual
+            setComentario('');   // limpia el input después de aceptar
+          }}
+          disabled={!comentario?.trim()}
+        >
+          Aceptar
+        </Button>
+
         <IconButton size="small" onClick={() => setOpenIncludes(true)}>
           <MoreVert sx={{ color: '#fff' }} />
         </IconButton>
@@ -159,47 +177,111 @@ export default function Carrito({
 
       {/* Lista de ítems */}
       <List sx={{ flex: 1, overflowY: 'auto' }}>
-        {ordenados.map(({ p: item, i: idx }) => (
-          <React.Fragment key={idx}>
-            <ListItem
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                bgcolor: '#2c2c2c',
-                borderRadius: 1,
-                mb: 1,
-                py: 1,
-                px: 1
-              }}
-            >
+        {/* 🔹 separador “activo” apenas aceptás el comentario */}
+        {grupoActual?.trim() && (
+          <Box key="sep-actual" sx={{ position: 'sticky', top: 0, zIndex: 1, bgcolor: '#1e1e1e' }}>
+            <Divider textAlign="left" sx={{ my: 1, '&::before, &::after': { borderColor: '#555' } }}>
               <Typography
                 sx={{
-                  fontSize: '0.825rem',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  px: 1,
+                  py: 0.5,
+                  bgcolor: '#333',
+                  borderRadius: 1,
+                  display: 'inline-block',
+                  maxWidth: '100%',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  flexGrow: 1
+                  whiteSpace: 'nowrap'
                 }}
+                title={grupoActual}
               >
-                {item.nombre}
+                {grupoActual}
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <IconButton size="small" onClick={() => onDecrementar(idx)}><Remove /></IconButton>
-                <TextField
-                  value={item.cantidad}
-                  onChange={e => onCantidadChange(idx, e.target.value)}
-                  size="small"
-                  inputProps={{ style: { textAlign: 'center', width: 32 } }}
-                  sx={{ bgcolor: '#2c2c2c', borderRadius: 1 }}
-                />
-                <IconButton size="small" onClick={() => onIncrementar(idx)}><Add /></IconButton>
-                <IconButton size="small" color="error" onClick={() => onEliminar(idx)}><Delete /></IconButton>
+            </Divider>
+          </Box>
+        )}
+
+        {(() => {
+          // 👇 clave: arrancamos 'lastGrupo' con el grupo activo para NO duplicar separador
+          let lastGrupo = (grupoActual || '').trim() || null;
+
+          return ordenados.flatMap(({ p: item, i: idx }) => {
+            const curGrupo = (item.grupo || '').trim();
+            const needsSep = curGrupo && curGrupo !== lastGrupo;
+            if (needsSep) lastGrupo = curGrupo;
+
+            const sep = needsSep ? (
+              <Box key={`sep-${idx}`} sx={{ position: 'sticky', top: 0, zIndex: 1, bgcolor: '#1e1e1e' }}>
+                <Divider textAlign="left" sx={{ my: 1, '&::before, &::after': { borderColor: '#555' } }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '0.9rem',
+                      px: 1,
+                      py: 0.5,
+                      bgcolor: '#333',
+                      borderRadius: 1,
+                      display: 'inline-block',
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                    title={curGrupo}
+                  >
+                    {curGrupo}
+                  </Typography>
+                </Divider>
               </Box>
-            </ListItem>
-            <Divider sx={{ borderColor: '#333', mb: 1 }} />
-          </React.Fragment>
-        ))}
+            ) : null;
+
+            const row = (
+              <React.Fragment key={idx}>
+                <ListItem
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    bgcolor: '#2c2c2c',
+                    borderRadius: 1,
+                    mb: 1,
+                    py: 1,
+                    px: 1
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: '0.825rem',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      flexGrow: 1
+                    }}
+                  >
+                    {item.nombre}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <IconButton size="small" onClick={() => onDecrementar(idx)}><Remove /></IconButton>
+                    <TextField
+                      value={item.cantidad}
+                      onChange={e => onCantidadChange(idx, e.target.value)}
+                      size="small"
+                      inputProps={{ style: { textAlign: 'center', width: 32 } }}
+                      sx={{ bgcolor: '#2c2c2c', borderRadius: 1 }}
+                    />
+                    <IconButton size="small" onClick={() => onIncrementar(idx)}><Add /></IconButton>
+                    <IconButton size="small" color="error" onClick={() => onEliminar(idx)}><Delete /></IconButton>
+                  </Box>
+                </ListItem>
+                <Divider sx={{ borderColor: '#333', mb: 1 }} />
+              </React.Fragment>
+            );
+
+            return needsSep ? [sep, row] : [row];
+          });
+        })()}
       </List>
 
       {/* Totales */}
@@ -246,7 +328,7 @@ export default function Carrito({
         <DialogContent dividers sx={{ overflowY: 'auto' }}>
           {productosSeleccionados.length ? (
             <>
-              {/* ✅ Controles masivos de jornadas */}
+              {/* 🔹 Controles masivos de jornadas */}
               <Box
                 sx={{
                   display: 'flex',
@@ -296,7 +378,7 @@ export default function Carrito({
                     key={idx}
                     sx={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr auto',
+                      gridTemplateColumns: '1fr auto auto', // ← 3 columnas: Detalle | Cantidad | Jornadas
                       columnGap: 2,
                       alignItems: 'center',
                       mb: 2,
@@ -306,10 +388,46 @@ export default function Carrito({
                       bgcolor: '#2a2a2a'
                     }}
                   >
+                    {/* Columna: detalle */}
                     <Box>
                       <Typography fontWeight={600}>{item.nombre}</Typography>
                       <Typography variant="body2">{item.incluye || 'Sin info.'}</Typography>
                     </Box>
+
+                    {/* Columna: Cantidad (EDITABLE) */}
+                    <Box display="flex" flexDirection="column" alignItems="center">
+                      <Typography variant="caption" color="gray">Cantidad</Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          border: '1px dashed gray',
+                          borderRadius: 1,
+                          p: '2px 4px',
+                          bgcolor: '#1e1e1e'
+                        }}
+                      >
+                        <IconButton size="small" onClick={() => onDecrementar(idx)}>
+                          <Remove fontSize="small" />
+                        </IconButton>
+
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={item.cantidad}
+                          onChange={(e) => onCantidadChange(idx, e.target.value)}
+                          inputProps={{ min: 1, style: { textAlign: 'center', width: 48 } }}
+                          sx={{ bgcolor: '#2c2c2c', borderRadius: 1 }}
+                        />
+
+                        <IconButton size="small" onClick={() => onIncrementar(idx)}>
+                          <Add fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </Box>
+
+                    {/* Columna: Jornadas (con - / +) */}
                     <Box display="flex" flexDirection="column" alignItems="center">
                       <Typography variant="caption" color="gray">Jornadas</Typography>
                       <Box display="flex" alignItems="center" sx={{ border: '1px dashed gray', borderRadius: 1, p: '2px 4px', bgcolor: '#1e1e1e' }}>

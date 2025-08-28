@@ -45,6 +45,9 @@ export default function ProductosPOS() {
   const [comentario, setComentario] = useState(() => localStorage.getItem('comentario') || '');
   useEffect(() => { localStorage.setItem('comentario', comentario); }, [comentario]);
 
+  // 🔹 Grupo actual (ej: "Lunes", "Martes", etc.)
+  const [grupoActual, setGrupoActual] = useState('');
+
   // pedido número y jornadas
   const [pedidoNumero, setPedidoNumero] = useState('');
   const [jornadasMap, setJornadasMap] = useState({});
@@ -79,7 +82,6 @@ export default function ProductosPOS() {
   const handleGenerarRemito = () => {
     if (!cliente.nombre) { handleOpenCliente(); return; }
     const num = generarNumeroRemito();
-    // Orden correcto de la firma:
     // (cliente, items, atendidoPor, numeroRemito, pedidoNumero, jornadasMap, comentario)
     generarRemitoPDF(cliente, carrito, '', num, pedidoNumero, jornadasMap, comentario);
   };
@@ -158,7 +160,10 @@ export default function ProductosPOS() {
   };
   const handleSelectSerial = serial => {
     if (pendingProduct) {
-      setCarrito(c => [...c, { ...pendingProduct, serial, cantidad: 1 }]);
+      setCarrito(c => [
+        ...c,
+        { ...pendingProduct, serial, cantidad: 1, grupo: (grupoActual || '').trim() } // 🔹 guarda el grupo actual
+      ]);
       setPendingProduct(null);
     }
     setOpenSerialDialog(false);
@@ -193,6 +198,9 @@ export default function ProductosPOS() {
           comentario={comentario}
           setComentario={setComentario}
           onClearAll={() => setCarrito([])}
+          // 🔹 grupo actual
+          grupoActual={grupoActual}
+          setGrupoActual={setGrupoActual}
         />
       </Box>
 

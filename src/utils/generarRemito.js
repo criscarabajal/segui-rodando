@@ -20,9 +20,9 @@ export default function generarRemitoPDF(
   productosSeleccionados,
   atendidoPor,
   numeroRemito,
-  pedidoNumero = "",
-  jornadasMap = {},
-  comentario = ""            // ← NUEVO: nota libre
+  pedidoNumero = "",       // si no llega, queda string vacío
+  jornadasMap = {},        // mapa de jornadas por índice
+  comentario = ""          // 🔹 comentario libre para la fila debajo de header
 ) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
@@ -80,52 +80,95 @@ export default function generarRemitoPDF(
     { header: "Cod.", dataKey: "cod" }
   ];
 
-  // Agrupar por categoría
-  const grupos = {};
-  productosSeleccionados.forEach((item, idx) => {
-    const cat = item.categoria || "Sin categoría";
-    if (!grupos[cat]) grupos[cat] = [];
-    grupos[cat].push({ ...item, __idx: idx });
-  });
-
   // Comentario (usa parámetro o localStorage si no vino)
   const comentarioLinea = (comentario ?? localStorage.getItem("comentario") ?? "").trim();
 
+  // Construimos el body:
+  // 1) Fila de comentario (si hay)
+  // 2) Grupos (Lunes/Martes/...) -> Categorías -> Productos
   const body = [];
 
-  // ——— Fila de comentario justo debajo del encabezado ———
-if (comentarioLinea) {
-  body.push([{
-    content: comentarioLinea,
-    colSpan: 4,
-    styles: { 
-      fillColor: [245, 245, 245], 
-      fontStyle: "bold", 
-      fontSize: 14,           // más grande
-      halign: "left",         // alineado a la izquierda
-      valign: "middle",       // centrado vertical
-      cellPadding: {          // 🔹 más padding arriba y abajo
-        top: 8,
-        bottom: 8,
-        left: 4,
-        right: 4
-      }
-    }
-  }]);
-}
-
-
-  // Filas por categorías + productos
-  Object.entries(grupos).forEach(([cat, items]) => {
+  // (1) ——— Fila de comentario justo debajo del header
+  if (comentarioLinea) {
     body.push([{
-      content: cat,
+      content: comentarioLinea,
       colSpan: 4,
-      styles: { fillColor: [235, 235, 235], fontStyle: "bold" }
+      styles: {
+        fillColor: [245, 245, 245],
+        fontStyle: "bold",
+        fontSize: 14,
+        halign: "left",
+        valign: "middle",
+        cellPadding: { top: 8, bottom: 8, left: 4, right: 4 }
+      }
     }]);
-    items.forEach(i => {
-      const lineas = [i.nombre];
-      if (i.incluye) lineas.push(...(String(i.incluye).split("\n")));
-      body.push([i.cantidad, lineas.join("\n"), i.serial || "", ""]);
+  }
+
+  // (2) ——— Agrupar: primero por grupo, luego por categoría
+  // grupo '' (sin grupo) va al final para priorizar los días
+  const normalizar = (s) => (String(s || "")).trim();
+  const itemsConIdx = productosSeleccionados.map((it, idx) => ({ ...it, __idx: idx }));
+
+  // Orden por grupo preservando orden de ingreso, pero agrupado
+  const grupos = itemsConIdx.reduce((acc, it) => {
+    const g = normalizar(it.grupo) || "Sin grupo";
+    if (!acc[g]) acc[g] = [];
+    acc[g].push(it);
+    return acc;
+  }, {});
+
+  // Orden sugerido: grupos con nombre (no "Sin grupo"), y al final "Sin grupo"
+  const nombresGrupo = Object.keys(grupos)
+    .sort((a, b) => (a === "Sin grupo") - (b === "Sin grupo")); // "Sin grupo" queda último
+
+  nombresGrupo.forEach((gName) => {
+    // Fila separador de grupo
+    body.push([{
+      content: gName,
+      colSpan: 4,
+      styles: {
+        fillColor: [210, 210, 210],
+        fontStyle: "bold",
+        fontSize: 12,
+        halign: "left",
+        valign: "middle",
+        cellPadding: { top: 6, bottom: 6, left: 4, right: 4 }
+      }
+    }]);
+
+    // Dentro del grupo, agrupamos por categoría
+    const porCategoria = grupos[gName].reduce((acc, it) => {
+      const cat = it.categoria || "Sin categoría";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(it);
+      return acc;
+    }, {});
+
+    Object.entries(porCategoria).forEach(([cat, items]) => {
+      // Fila separador de categoría
+      body.push([{
+        content: cat,
+        colSpan: 4,
+        styles: {
+          fillColor: [235, 235, 235],
+          fontStyle: "bold",
+          halign: "left",
+          valign: "middle",
+          cellPadding: { top: 4, bottom: 4, left: 4, right: 4 }
+        }
+      }]);
+
+      // Filas de productos
+      items.forEach((i) => {
+        const lineas = [i.nombre];
+        if (i.incluye) lineas.push(...String(i.incluye).split("\n"));
+        body.push([
+          i.cantidad,
+          lineas.join("\n"),
+          i.serial || "",
+          ""
+        ]);
+      });
     });
   });
 
@@ -143,7 +186,7 @@ if (comentarioLinea) {
     }
   });
 
-  // ——— PIE: totales, pago, firmas ———
+  // ——— PIE DE PÁGINA (precio, descuento, firmas) ———
   const endY = doc.lastAutoTable.finalY + 20;
 
   // Total sin IVA considerando jornadas
