@@ -19,22 +19,25 @@ import {
 import { Add, Remove, Delete, MoreVert } from '@mui/icons-material';
 
 export default function Carrito({
-  productosSeleccionados,
-  onIncrementar,
-  onDecrementar,
-  onCantidadChange,
-  onEliminar,
-  jornadasMap,
-  setJornadasMap,
-  comentario,            // ← viene del padre
-  setComentario,         // ← viene del padre
-  pedidoNumero,
-  setPedidoNumero,
-  onClearAll,
+  productosSeleccionados = [],
+  onIncrementar = () => {},
+  onDecrementar = () => {},
+  onCantidadChange = () => {},
+  onEliminar = () => {},
+  jornadasMap = {},
+  setJornadasMap = () => {},
+  comentario = '',           // ← viene del padre
+  setComentario = () => {},  // ← viene del padre
+  pedidoNumero = '',
+  setPedidoNumero = () => {},
+  onClearAll = () => {},
   // 🔹 grupo actual (día/etiqueta) controlado por el padre
-  grupoActual,
+  grupoActual = '',
   setGrupoActual
 }) {
+  // ✅ Envoltorio seguro (no rompe si no te pasan la función)
+  const safeSetGrupoActual = typeof setGrupoActual === 'function' ? setGrupoActual : () => {};
+
   const [discount, setDiscount] = useState('0');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [openIncludes, setOpenIncludes] = useState(false);
@@ -55,13 +58,14 @@ export default function Carrito({
       init[idx] = serialMap[idx] ?? opts[0] ?? '';
     });
     setSerialMap(init);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openIncludes, productosSeleccionados]);
 
   // 🔹 Al escribir en el input, el texto pasa a ser el grupo activo automáticamente
   useEffect(() => {
     const v = (comentario || '').trim();
-    setGrupoActual(v); // si está vacío, no hay grupo activo
-  }, [comentario, setGrupoActual]);
+    safeSetGrupoActual(v); // si está vacío, no hay grupo activo
+  }, [comentario]); // (no agrego safeSetGrupoActual para evitar re-disparos innecesarios)
 
   const handleApplyDiscount = () => {
     if (discount === 'especial') {
@@ -167,10 +171,10 @@ export default function Carrito({
           size="small"
           onClick={() => {
             // cerrar el día activo y limpiar input
-            setGrupoActual('');
+            safeSetGrupoActual('');
             setComentario('');
           }}
-          disabled={!grupoActual?.trim()}
+          disabled={!String(grupoActual || '').trim()}
         >
           Aceptar
         </Button>
@@ -183,7 +187,7 @@ export default function Carrito({
       {/* Lista de ítems */}
       <List sx={{ flex: 1, overflowY: 'auto' }}>
         {/* 🔹 separador “activo” apenas escribís el día, con botón Aceptar al lado */}
-        {grupoActual?.trim() && (
+        {String(grupoActual || '').trim() && (
           <Box key="sep-actual" sx={{ position: 'sticky', top: 0, zIndex: 1, bgcolor: '#1e1e1e' }}>
             <Divider textAlign="left" sx={{ my: 1, '&::before, &::after': { borderColor: '#555' } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -211,7 +215,7 @@ export default function Carrito({
                   variant="outlined"
                   onClick={() => {
                     // cerrar el día actual: limpiar grupo activo y el input
-                    setGrupoActual('');
+                    safeSetGrupoActual('');
                     setComentario('');
                   }}
                 >
@@ -224,10 +228,10 @@ export default function Carrito({
 
         {(() => {
           // 👇 arrancamos 'lastGrupo' con el grupo activo para NO duplicar separador
-          let lastGrupo = (grupoActual || '').trim() || null;
+          let lastGrupo = String(grupoActual || '').trim() || null;
 
           return ordenados.flatMap(({ p: item, i: idx }) => {
-            const curGrupo = (item.grupo || '').trim();
+            const curGrupo = String(item.grupo || '').trim();
             const needsSep = curGrupo && curGrupo !== lastGrupo;
             if (needsSep) lastGrupo = curGrupo;
 
@@ -505,7 +509,7 @@ export default function Carrito({
                         {/* Jornadas (editable) */}
                         <Box display="flex" flexDirection="column" alignItems="center">
                           <Typography variant="caption" color="gray">Jornadas</Typography>
-                          <Box display="flex" alignItems="center" sx={{ border: '1px dashed gray', borderRadius: 1, p: '2px 4px', bgcolor: '#1e1e1e' }}>
+                          <Box display="flex" alignItems="center" sx={{ border: '1px dashed gray', borderRadius: 1, p: '2px 4px', bgcolor:'#1e1e1e' }}>
                             <IconButton size="small" onClick={() =>
                               setJornadasMap(prev => ({ ...prev, [idx]: Math.max(1, (prev[idx]||1)-1) }))
                             }><Remove fontSize="small" /></IconButton>
