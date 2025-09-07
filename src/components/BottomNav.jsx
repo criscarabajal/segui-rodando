@@ -19,60 +19,50 @@ export default function BottomNav({
         backgroundColor: 'grey.900',
         p: 2,
         zIndex: 1000,
+        display: 'flex',
+        gap: 2
       }}
     >
-      <Grid container spacing={2}>
-        <Grid item xs={2}>
-          <Button
-            fullWidth
-            variant="contained"
-            color="primary"
-            onClick={onOpenCliente}
-          >
-            Cliente
-          </Button>
-        </Grid>
-        <Grid item xs={2}>
-          <Button
-            fullWidth
-            variant="contained"
-            color="success"
-            onClick={onGenerarRemito}
-          >
-            Remito
-          </Button>
-        </Grid>
-        <Grid item xs={2}>
-          <Button
-            fullWidth
-            variant="contained"
-            color="secondary"
-            onClick={onGenerarPresupuesto}
-          >
-            Presupuesto
-          </Button>
-        </Grid>
-        <Grid item xs={2}>
-          <Button
-            fullWidth
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={onOpenCliente}
+      >
+        Cliente
+      </Button>
+      <Button
+        variant="contained"
+        color="success"
+        onClick={onGenerarRemito}
+      >
+        Generar Remito
+      </Button>
+      <Button
+        variant="contained"
+        color="secondary"
+        onClick={onGenerarPresupuesto}
+      >
+        Generar Presupuesto
+      </Button>
+      <Button
             variant="contained"
             color="info"
             onClick={onGenerarSeguro}
           >
             Seguros
-          </Button>
-        </Grid>
-        <Grid item xs={2}>
-          <Button
-            fullWidth
-            variant="contained"
-            color="warning"
-            onClick={onCancelar}
-          >
-            Cancelar
-          </Button>
-        </Grid>
-      </Grid>
+       </Button>
+        
+
+      {/* Botón Cancelar a la derecha */}
+      <Button
+        variant="contained"
+        color="error"
+        onClick={onCancelar}
+        sx={{ ml: 'auto' }}
+      >
+        Cancelar
+      </Button>
     </Box>
   );
 }
+

@@ -1,5 +1,5 @@
 // src/components/ProductosPOS.jsx
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   TextField,
@@ -13,7 +13,8 @@ import {
   useTheme,
   Typography,
   Grid,
-  MenuItem
+  MenuItem,
+  Alert
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -93,7 +94,6 @@ export default function ProductosPOS() {
   const handleGenerarSeguro = () => {
     if (!cliente.nombre) { handleOpenCliente(); return; }
     const num = generarNumeroSeguro();
-    // firma (cliente, productosSeleccionados, atendidoPor, numeroSeguro, pedidoNumero, jornadasMap)
     generarSeguroPDF(cliente, carrito, num, pedidoNumero, jornadasMap);
   };
 
@@ -154,15 +154,24 @@ export default function ProductosPOS() {
   // diálogo de serial
   const [openSerialDialog, setOpenSerialDialog] = useState(false);
   const [pendingProduct, setPendingProduct] = useState(null);
-  const handleCardClick = prod => {
+
+  // 🔒 NO permitir agregar productos si no hay un día elegido (grupoActual vacío)
+  const canAddToDay = Boolean((grupoActual || '').trim());
+
+  const handleCardClick = (prod) => {
+    if (!canAddToDay) {
+      alert('Primero elegí un día (por ejemplo: Lunes) y luego agregá productos en ese día.');
+      return;
+    }
     setPendingProduct(prod);
     setOpenSerialDialog(true);
   };
-  const handleSelectSerial = serial => {
+
+  const handleSelectSerial = (serial) => {
     if (pendingProduct) {
       setCarrito(c => [
         ...c,
-        { ...pendingProduct, serial, cantidad: 1, grupo: (grupoActual || '').trim() } // 🔹 guarda el grupo actual
+        { ...pendingProduct, serial, cantidad: 1, grupo: (grupoActual || '').trim() } // guarda el día activo
       ]);
       setPendingProduct(null);
     }
@@ -198,7 +207,7 @@ export default function ProductosPOS() {
           comentario={comentario}
           setComentario={setComentario}
           onClearAll={() => setCarrito([])}
-          // 🔹 grupo actual
+          // grupo actual
           grupoActual={grupoActual}
           setGrupoActual={setGrupoActual}
         />
@@ -206,8 +215,18 @@ export default function ProductosPOS() {
 
       {/* PRODUCTOS 60% */}
       <Box sx={{ position: 'fixed', top: HEADER, bottom: FOOTER, left: '40vw', right: 0, bgcolor: 'grey.800', overflowY: 'auto' }}>
+
+        {/* 🔔 Aviso sticky hasta que se elija un día */}
+        {!canAddToDay && (
+          <Box sx={{ position: 'sticky', top: 0, zIndex: 1300, px: 1, pt: 1, bgcolor: 'grey.800' }}>
+            <Alert severity="info" variant="outlined" sx={{ borderColor: 'primary.main' }}>
+              Primero escribí un <b>día</b> en el carrito (ej: “Lunes”) y después agregá productos a ese día.
+            </Alert>
+          </Box>
+        )}
+
         {/* filtros de categorías */}
-        <Box sx={{ position: 'sticky', top: 0, py: 1, px: 1, bgcolor: 'grey.800', zIndex: 1300 }}>
+        <Box sx={{ position: 'sticky', top: !canAddToDay ? 64 : 0, py: 1, px: 1, bgcolor: 'grey.800', zIndex: 1200, transition: 'top .2s' }}>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: favorita ? 1 : 0 }}>
             <Button size="small" variant={!favorita?'contained':'outlined'} onClick={() => { setFavorita(''); setSubcategoria(''); }}>Todas</Button>
             {categoriasNav.map((cat,i) => (
@@ -239,8 +258,11 @@ export default function ProductosPOS() {
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
-                  cursor: 'pointer',
-                  '&:hover': { bgcolor: 'grey.600' }
+                  // 🔒 bloquea interacción y baja opacidad si no hay día elegido
+                  cursor: canAddToDay ? 'pointer' : 'not-allowed',
+                  opacity: canAddToDay ? 1 : 0.5,
+                  pointerEvents: canAddToDay ? 'auto' : 'none',
+                  '&:hover': { bgcolor: canAddToDay ? 'grey.600' : 'grey.700' }
                 }}
               >
                 <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{p.nombre}</Typography>

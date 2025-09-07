@@ -15,11 +15,8 @@ import dayjs from 'dayjs';
 export default function FormularioClienteSide() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    nombre: '',
-    apellido: '',
+    nombre: '',   
     dni: '',
-    telefono: '',
-    correo: '',
     fechaRetiro: null,
     fechaDevolucion: null,
   });
@@ -38,8 +35,6 @@ export default function FormularioClienteSide() {
       nombre,
       apellido,
       dni,
-      telefono,
-      correo,
       fechaRetiro,
       fechaDevolucion
     } = formData;
@@ -48,8 +43,6 @@ export default function FormularioClienteSide() {
       !nombre ||
       !apellido ||
       !dni ||
-      !telefono ||
-      !correo ||
       !fechaRetiro ||
       !fechaDevolucion
     ) {
@@ -115,25 +108,7 @@ export default function FormularioClienteSide() {
           value={formData.dni}
           onChange={handleChange}
         />
-        <TextField
-          margin="normal"
-          required
-          fullWidth
-          label="Teléfono"
-          name="telefono"
-          value={formData.telefono}
-          onChange={handleChange}
-        />
-        <TextField
-          margin="normal"
-          required
-          fullWidth
-          label="Correo Electrónico"
-          name="correo"
-          type="email"
-          value={formData.correo}
-          onChange={handleChange}
-        />
+       
 
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <DateTimePicker

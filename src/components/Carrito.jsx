@@ -57,6 +57,12 @@ export default function Carrito({
     setSerialMap(init);
   }, [openIncludes, productosSeleccionados]);
 
+  // 🔹 Al escribir en el input, el texto pasa a ser el grupo activo automáticamente
+  useEffect(() => {
+    const v = (comentario || '').trim();
+    setGrupoActual(v); // si está vacío, no hay grupo activo
+  }, [comentario, setGrupoActual]);
+
   const handleApplyDiscount = () => {
     if (discount === 'especial') {
       const pwd = prompt('Contraseña:');
@@ -141,7 +147,7 @@ export default function Carrito({
         {/* Comentario arriba de todo */}
         <TextField
           size="small"
-          placeholder="Comentario… (ej: Lunes)"
+          placeholder="Día / separador… (ej: Lunes)"
           value={comentario}
           onChange={(e) => setComentario(e.target.value)}
           sx={{
@@ -155,17 +161,16 @@ export default function Carrito({
           inputProps={{ maxLength: 200 }}
         />
 
-        {/* ✅ Botón Aceptar: fija grupo y limpia el input */}
+        {/* (Opcional) Aceptar del header: también cierra el día actual */}
         <Button
           variant="contained"
           size="small"
           onClick={() => {
-            const v = (comentario || '').trim();
-            if (!v) return;
-            setGrupoActual(v);   // fija el “día/etiqueta” actual
-            setComentario('');   // limpia el input después de aceptar
+            // cerrar el día activo y limpiar input
+            setGrupoActual('');
+            setComentario('');
           }}
-          disabled={!comentario?.trim()}
+          disabled={!grupoActual?.trim()}
         >
           Aceptar
         </Button>
@@ -177,34 +182,48 @@ export default function Carrito({
 
       {/* Lista de ítems */}
       <List sx={{ flex: 1, overflowY: 'auto' }}>
-        {/* 🔹 separador “activo” apenas aceptás el comentario */}
+        {/* 🔹 separador “activo” apenas escribís el día, con botón Aceptar al lado */}
         {grupoActual?.trim() && (
           <Box key="sep-actual" sx={{ position: 'sticky', top: 0, zIndex: 1, bgcolor: '#1e1e1e' }}>
             <Divider textAlign="left" sx={{ my: 1, '&::before, &::after': { borderColor: '#555' } }}>
-              <Typography
-                sx={{
-                  fontWeight: 700,
-                  fontSize: '0.9rem',
-                  px: 1,
-                  py: 0.5,
-                  bgcolor: '#333',
-                  borderRadius: 1,
-                  display: 'inline-block',
-                  maxWidth: '100%',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}
-                title={grupoActual}
-              >
-                {grupoActual}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    px: 1,
+                    py: 0.5,
+                    bgcolor: '#333',
+                    borderRadius: 1,
+                    display: 'inline-block',
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title={grupoActual}
+                >
+                  {grupoActual}
+                </Typography>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    // cerrar el día actual: limpiar grupo activo y el input
+                    setGrupoActual('');
+                    setComentario('');
+                  }}
+                >
+                  Aceptar
+                </Button>
+              </Box>
             </Divider>
           </Box>
         )}
 
         {(() => {
-          // 👇 clave: arrancamos 'lastGrupo' con el grupo activo para NO duplicar separador
+          // 👇 arrancamos 'lastGrupo' con el grupo activo para NO duplicar separador
           let lastGrupo = (grupoActual || '').trim() || null;
 
           return ordenados.flatMap(({ p: item, i: idx }) => {
@@ -317,7 +336,16 @@ export default function Carrito({
         <Button variant="contained" size="small" onClick={handleApplyDiscount}>
           Aplicar descuento
         </Button>
-        <Button variant="outlined" color="error" size="small" onClick={onClearAll}>
+        <Button
+          variant="outlined"
+          color="error"
+          size="small"
+          onClick={() => {
+            if (window.confirm("¿Seguro que desea borrar todo?")) {
+              onClearAll();
+            }
+          }}
+        >
           Borrar todo
         </Button>
       </Box>
@@ -371,78 +399,129 @@ export default function Carrito({
                 </Button>
               </Box>
 
-              {productosSeleccionados.map((item, idx) => {
-                const j = jornadasMap[idx] || 1;
-                return (
-                  <Box
-                    key={idx}
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto auto', // ← 3 columnas: Detalle | Cantidad | Jornadas
-                      columnGap: 2,
-                      alignItems: 'center',
-                      mb: 2,
-                      p: 1,
-                      border: '1px solid #444',
-                      borderRadius: 1,
-                      bgcolor: '#2a2a2a'
-                    }}
-                  >
-                    {/* Columna: detalle */}
-                    <Box>
-                      <Typography fontWeight={600}>{item.nombre}</Typography>
-                      <Typography variant="body2">{item.incluye || 'Sin info.'}</Typography>
-                    </Box>
+              {/* === LISTADO AGRUPADO POR DÍA (SIN '||=') === */}
+              {(() => {
+                const normalizar = (s) => String(s || '').trim();
+                // mantener índice original
+                const items = productosSeleccionados.map((it, idx) => ({ it, idx }));
 
-                    {/* Columna: Cantidad (EDITABLE) */}
-                    <Box display="flex" flexDirection="column" alignItems="center">
-                      <Typography variant="caption" color="gray">Cantidad</Typography>
+                // agrupar
+                const grupos = {};
+                items.forEach((x) => {
+                  const g = normalizar(x.it.grupo) || 'Sin grupo';
+                  if (!grupos[g]) grupos[g] = [];
+                  grupos[g].push(x);
+                });
+
+                // ordenar: con nombre primero, "Sin grupo" último
+                const ordenGrupos = Object.keys(grupos).sort((a, b) => {
+                  if (a === 'Sin grupo' && b !== 'Sin grupo') return 1;
+                  if (b === 'Sin grupo' && a !== 'Sin grupo') return -1;
+                  return a.localeCompare(b);
+                });
+
+                return ordenGrupos.flatMap((gName) => {
+                  const cabecera = (
+                    <Box key={`gsep-${gName}`} sx={{ position: 'sticky', top: 0, zIndex: 1, bgcolor: '#2a2a2a' }}>
+                      <Divider textAlign="left" sx={{ my: 1, '&::before, &::after': { borderColor: '#555' } }}>
+                        <Typography
+                          sx={{
+                            fontWeight: 700,
+                            fontSize: '0.9rem',
+                            px: 1,
+                            py: 0.5,
+                            bgcolor: '#333',
+                            borderRadius: 1,
+                            display: 'inline-block',
+                            maxWidth: '100%',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title={gName}
+                        >
+                          {gName}
+                        </Typography>
+                      </Divider>
+                    </Box>
+                  );
+
+                  const filas = grupos[gName].map(({ it: item, idx }) => {
+                    const j = jornadasMap[idx] || 1;
+                    return (
                       <Box
+                        key={`row-${gName}-${idx}`}
                         sx={{
-                          display: 'flex',
+                          display: 'grid',
+                          gridTemplateColumns: '1fr auto auto', // Detalle | Cantidad | Jornadas
+                          columnGap: 2,
                           alignItems: 'center',
-                          gap: 0.5,
-                          border: '1px dashed gray',
+                          mb: 2,
+                          p: 1,
+                          border: '1px solid #444',
                           borderRadius: 1,
-                          p: '2px 4px',
-                          bgcolor: '#1e1e1e'
+                          bgcolor: '#2a2a2a'
                         }}
                       >
-                        <IconButton size="small" onClick={() => onDecrementar(idx)}>
-                          <Remove fontSize="small" />
-                        </IconButton>
+                        {/* Detalle */}
+                        <Box>
+                          <Typography fontWeight={600}>{item.nombre}</Typography>
+                          <Typography variant="body2">{item.incluye || 'Sin info.'}</Typography>
+                        </Box>
 
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={item.cantidad}
-                          onChange={(e) => onCantidadChange(idx, e.target.value)}
-                          inputProps={{ min: 1, style: { textAlign: 'center', width: 48 } }}
-                          sx={{ bgcolor: '#2c2c2c', borderRadius: 1 }}
-                        />
+                        {/* Cantidad (editable) */}
+                        <Box display="flex" flexDirection="column" alignItems="center">
+                          <Typography variant="caption" color="gray">Cantidad</Typography>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                              border: '1px dashed gray',
+                              borderRadius: 1,
+                              p: '2px 4px',
+                              bgcolor: '#1e1e1e'
+                            }}
+                          >
+                            <IconButton size="small" onClick={() => onDecrementar(idx)}>
+                              <Remove fontSize="small" />
+                            </IconButton>
 
-                        <IconButton size="small" onClick={() => onIncrementar(idx)}>
-                          <Add fontSize="small" />
-                        </IconButton>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={item.cantidad}
+                              onChange={(e) => onCantidadChange(idx, e.target.value)}
+                              inputProps={{ min: 1, style: { textAlign: 'center', width: 48 } }}
+                              sx={{ bgcolor: '#2c2c2c', borderRadius: 1 }}
+                            />
+
+                            <IconButton size="small" onClick={() => onIncrementar(idx)}>
+                              <Add fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        </Box>
+
+                        {/* Jornadas (editable) */}
+                        <Box display="flex" flexDirection="column" alignItems="center">
+                          <Typography variant="caption" color="gray">Jornadas</Typography>
+                          <Box display="flex" alignItems="center" sx={{ border: '1px dashed gray', borderRadius: 1, p: '2px 4px', bgcolor: '#1e1e1e' }}>
+                            <IconButton size="small" onClick={() =>
+                              setJornadasMap(prev => ({ ...prev, [idx]: Math.max(1, (prev[idx]||1)-1) }))
+                            }><Remove fontSize="small" /></IconButton>
+                            <Typography mx={0.5}>{j}</Typography>
+                            <IconButton size="small" onClick={() =>
+                              setJornadasMap(prev => ({ ...prev, [idx]: (prev[idx]||1)+1 }))
+                            }><Add fontSize="small" /></IconButton>
+                          </Box>
+                        </Box>
                       </Box>
-                    </Box>
+                    );
+                  });
 
-                    {/* Columna: Jornadas (con - / +) */}
-                    <Box display="flex" flexDirection="column" alignItems="center">
-                      <Typography variant="caption" color="gray">Jornadas</Typography>
-                      <Box display="flex" alignItems="center" sx={{ border: '1px dashed gray', borderRadius: 1, p: '2px 4px', bgcolor: '#1e1e1e' }}>
-                        <IconButton size="small" onClick={() =>
-                          setJornadasMap(prev => ({ ...prev, [idx]: Math.max(1, (prev[idx]||1)-1) }))
-                        }><Remove fontSize="small" /></IconButton>
-                        <Typography mx={0.5}>{j}</Typography>
-                        <IconButton size="small" onClick={() =>
-                          setJornadasMap(prev => ({ ...prev, [idx]: (prev[idx]||1)+1 }))
-                        }><Add fontSize="small" /></IconButton>
-                      </Box>
-                    </Box>
-                  </Box>
-                );
-              })}
+                  return [cabecera, ...filas];
+                });
+              })()}
             </>
           ) : (
             <Typography>No hay productos seleccionados.</Typography>
