@@ -1,8 +1,8 @@
 // src/components/ProductosPOS.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Box, TextField, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
-  Button, InputAdornment, IconButton, useTheme, Alert
+  Box, TextField, MenuItem, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
+  Button, Grid, InputAdornment, IconButton, useTheme, Alert
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -21,22 +21,10 @@ const defaultCats = [
   'BATERIAS','MONITOREO','FILTROS','ACCESORIOS DE CAMARA','SONIDO'
 ];
 
-// helper: ahora en formato "YYYY-MM-DDTHH:MM" para input datetime-local
-const nowLocalDatetime = () => {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth() + 1);
-  const dd = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const mi = pad(d.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-};
-
 export default function ProductosPOS() {
   const theme = useTheme();
-  const HEADER = 72;
-  const FOOTER = 72;
+  const HEADER = 72;  // alto del header
+  const FOOTER = 72;  // alto del BottomNav
 
   const CARD_HEIGHT = 180;
   const ROW_GAP = 16;
@@ -45,7 +33,7 @@ export default function ProductosPOS() {
   // ===== Pedido / separador =====
   const [pedidoNumero, setPedidoNumero] = useState('');
   const [comentario, setComentario] = useState('');
-  const [grupoActual, setGrupoActual] = useState('');
+  const [grupoActual, setGrupoActual] = useState(''); // Día/separador activo
 
   // ===== Categorías nav (editables) =====
   const [categoriasNav, setCategoriasNav] = useState(() => {
@@ -136,17 +124,19 @@ export default function ProductosPOS() {
         ...prod,
         serial,
         cantidad: 1,
-        grupo: (grupoActual || '').trim(),
+        // si grupoActual aún no llegó por timing, usamos comentario
+        grupo: (grupoActual || comentario || '').trim(),
         valorReposicion: prod.valorReposicion,
       }
     ]);
   };
 
-  // ===== Diálogo de serial =====
+  // ===== Diálogo de serial (por ahora no lo usamos, agregamos directo) =====
   const [openSerialDialog, setOpenSerialDialog] = useState(false);
   const [pendingProduct, setPendingProduct] = useState(null);
 
-  const faltaGrupo = !(grupoActual || '').trim();
+  // Evitá race condition: habilitá por comentario (input) directamente
+  const faltaGrupo = !(comentario || '').trim();
 
   const handleCardClick = (prod) => {
     if (isSliding) return;
@@ -154,69 +144,41 @@ export default function ProductosPOS() {
       alert('Primero ingresá un "Día / separador" en el carrito.');
       return;
     }
-
-    const seriales = Array.isArray(prod.seriales) ? prod.seriales.filter(Boolean) : [];
-
+    // Agrega directo: sin, con 1 o con varias series, usa la primera
+    const seriales = Array.isArray(prod.seriales) ? prod.seriales : [];
     if (seriales.length === 0) {
       agregarAlCarritoConSerial(prod, '');
       return;
     }
-    if (seriales.length === 1) {
-      agregarAlCarritoConSerial(prod, seriales[0]);
-      return;
-    }
-
-    setPendingProduct(prod);
-    setOpenSerialDialog(true);
-  };
-
-  const handleSelectSerial = (serial) => {
-    if (pendingProduct) agregarAlCarritoConSerial(pendingProduct, serial);
-    setOpenSerialDialog(false);
-    setPendingProduct(null);
+    agregarAlCarritoConSerial(prod, seriales[0]);
   };
 
   // ===== Jornadas =====
   const [jornadasMap, setJornadasMap] = useState({});
 
   // ===== Cliente =====
-  // ⬇️ Eliminamos DNI del formulario
-  const initialClienteForm = { nombre: '', fechaRetiro: '', fechaDevolucion: '' };
-
+  const initialClienteForm = { nombre: '', dni: '', fechaRetiro: '', fechaDevolucion: '' };
   const [openCliente, setOpenCliente] = useState(false);
-  const [clienteForm, setClienteForm] = useState(
-    JSON.parse(localStorage.getItem('cliente')) || initialClienteForm
-  );
-  const [cliente, setCliente] = useState(
-    JSON.parse(localStorage.getItem('cliente')) || {}
-  );
+  const handleOpenCliente = () => setOpenCliente(true);
+  const clearClienteForm = () => { setClienteForm(initialClienteForm); setDniInput(''); setClientSuggestion(''); };
+  const handleCloseCliente = () => { clearClienteForm(); setOpenCliente(false); };
+  const [clienteForm, setClienteForm] = useState(JSON.parse(localStorage.getItem('cliente')) || initialClienteForm);
+  const [cliente, setCliente] = useState(JSON.parse(localStorage.getItem('cliente')) || {});
+  const [dniInput, setDniInput] = useState(clienteForm.dni || '');
+  const [clientSuggestion, setClientSuggestion] = useState('');
+  const [clientes] = useState([]);
 
-  // al abrir, si no hay fecha de retiro cargada, setear ahora
-  const handleOpenCliente = () => {
-    setClienteForm(prev => ({
-      ...prev,
-      fechaRetiro: prev.fechaRetiro || nowLocalDatetime()
-    }));
-    setOpenCliente(true);
-  };
-
-  const clearClienteForm = () => {
-    setClienteForm(initialClienteForm);
-  };
-  const handleCloseCliente = () => {
-    clearClienteForm();
-    setOpenCliente(false);
-  };
-
+  const handleClientSearch = () => {};
   const handleClienteChange = e => {
     const { name, value } = e.target;
+    if (name === 'dni') setDniInput(value);
     setClienteForm(prev => ({ ...prev, [name]: value }));
+    setClientSuggestion('');
   };
-
   const handleSaveCliente = () => {
-    const { nombre, fechaRetiro, fechaDevolucion } = clienteForm;
-    if (!nombre || !fechaRetiro || !fechaDevolucion) {
-      alert('Completá nombre, fecha de retiro y fecha de devolución');
+    const { nombre, dni, fechaRetiro, fechaDevolucion } = clienteForm;
+    if (!nombre || !dni || !fechaRetiro || !fechaDevolucion) {
+      alert('Completá nombre, DNI, fecha de retiro y fecha de devolución');
       return;
     }
     localStorage.setItem('cliente', JSON.stringify(clienteForm));
@@ -237,11 +199,14 @@ export default function ProductosPOS() {
     const nro = String(pedidoNumero || '').trim();
     if (!nro) { alert('Ingresá un "Pedido N°" en el carrito para generar el Presupuesto.'); return; }
     const fecha = new Date().toLocaleDateString('es-AR');
+    // Firma: (cliente, productos, jornadasMap, fechaEmision, pedidoNumero)
     generarPresupuestoPDF(cliente, carrito, jornadasMap, fecha, nro);
 
     // limpiar cliente + inputs
     setClienteForm(initialClienteForm);
     setCliente({});
+    setDniInput('');
+    setClientSuggestion('');
     localStorage.removeItem('cliente');
 
     // limpiar N° pedido y separador
@@ -293,17 +258,17 @@ export default function ProductosPOS() {
         sx={{
           position: 'fixed',
           top: HEADER,
-          bottom: FOOTER,
+          bottom: FOOTER,   // respeta el espacio del BottomNav
           left: '30vw',
           right: 0,
           bgcolor: 'grey.800',
           overflowY: 'auto',
-          zIndex: 900
+          zIndex: 900       // menor que Carrito (1000) y BottomNav (1400)
         }}
       >
         {/* Categorías */}
         <Box sx={{ position: 'sticky', top: 0, zIndex: 1300, px: 1, py: 1, bgcolor: 'grey.800' }}>
-          {!(grupoActual || '').trim() && (
+          {!(comentario || '').trim() && (
             <Alert severity="info" variant="outlined" sx={{ mb: 1 }}>
               Ingresá un <strong>Día / separador</strong> en el carrito para poder agregar productos.
             </Alert>
@@ -347,10 +312,10 @@ export default function ProductosPOS() {
                   borderRadius: 1,
                   p: 1.5,
                   display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                  cursor: (isSliding || !(grupoActual || '').trim()) ? 'not-allowed' : 'pointer',
-                  opacity: !(grupoActual || '').trim() ? 0.6 : 1,
+                  cursor: (isSliding || !(comentario || '').trim()) ? 'not-allowed' : 'pointer',
+                  opacity: !(comentario || '').trim() ? 0.6 : 1,
                   pointerEvents: isSliding ? 'none' : 'auto',
-                  '&:hover': { bgcolor: !(isSliding || !(grupoActual || '').trim()) ? 'grey.600' : 'grey.700' }
+                  '&:hover': { bgcolor: !(isSliding || !(comentario || '').trim()) ? 'grey.600' : 'grey.700' }
                 }}
               >
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word' }}>
@@ -364,49 +329,6 @@ export default function ProductosPOS() {
           ))}
         </Slider>
       </Box>
-
-      {/* === Diálogo: Datos del cliente (sin DNI) === */}
-      <Dialog open={openCliente} onClose={handleCloseCliente} maxWidth="sm" fullWidth>
-        <DialogTitle>Datos del cliente</DialogTitle>
-        <DialogContent dividers sx={{ pt: 2 }}>
-          <Box sx={{ display: 'grid', gap: 2 }}>
-            <TextField
-              label="Nombre"
-              name="nombre"
-              value={clienteForm.nombre}
-              onChange={handleClienteChange}
-              size="small"
-              fullWidth
-            />
-
-            <TextField
-              label="Fecha de retiro"
-              name="fechaRetiro"
-              type="datetime-local"
-              InputLabelProps={{ shrink: true }}
-              value={clienteForm.fechaRetiro}
-              onChange={handleClienteChange}
-              size="small"
-              fullWidth
-            />
-
-            <TextField
-              label="Fecha de devolución"
-              name="fechaDevolucion"
-              type="datetime-local"
-              InputLabelProps={{ shrink: true }}
-              value={clienteForm.fechaDevolucion}
-              onChange={handleClienteChange}
-              size="small"
-              fullWidth
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseCliente}>Cancelar</Button>
-          <Button variant="contained" onClick={handleSaveCliente}>Guardar</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Editar categorías */}
       <Dialog open={openEditCats} onClose={handleCloseEditCats}>
