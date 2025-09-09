@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, TextField, MenuItem, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
-  Button, Grid, InputAdornment, IconButton, useTheme, Alert
+  Button, Grid, InputAdornment, IconButton, useTheme, Alert, RadioGroup, FormControlLabel, Radio
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -131,9 +131,10 @@ export default function ProductosPOS() {
     ]);
   };
 
-  // ===== Diálogo de serial (por ahora no lo usamos, agregamos directo) =====
+  // ===== Diálogo de serial =====
   const [openSerialDialog, setOpenSerialDialog] = useState(false);
   const [pendingProduct, setPendingProduct] = useState(null);
+  const [selectedSerial, setSelectedSerial] = useState('');
 
   // Evitá race condition: habilitá por comentario (input) directamente
   const faltaGrupo = !(comentario || '').trim();
@@ -144,13 +145,34 @@ export default function ProductosPOS() {
       alert('Primero ingresá un "Día / separador" en el carrito.');
       return;
     }
-    // Agrega directo: sin, con 1 o con varias series, usa la primera
     const seriales = Array.isArray(prod.seriales) ? prod.seriales : [];
     if (seriales.length === 0) {
       agregarAlCarritoConSerial(prod, '');
       return;
     }
-    agregarAlCarritoConSerial(prod, seriales[0]);
+    if (seriales.length === 1) {
+      agregarAlCarritoConSerial(prod, seriales[0]);
+      return;
+    }
+    // 2 o más seriales -> abrimos diálogo para elegir
+    setPendingProduct(prod);
+    setSelectedSerial(seriales[0] || '');
+    setOpenSerialDialog(true);
+  };
+
+  const handleConfirmSerial = () => {
+    if (pendingProduct) {
+      agregarAlCarritoConSerial(pendingProduct, selectedSerial || '');
+    }
+    setOpenSerialDialog(false);
+    setPendingProduct(null);
+    setSelectedSerial('');
+  };
+
+  const handleCloseSerialDialog = () => {
+    setOpenSerialDialog(false);
+    setPendingProduct(null);
+    setSelectedSerial('');
   };
 
   // ===== Jornadas =====
@@ -258,12 +280,12 @@ export default function ProductosPOS() {
         sx={{
           position: 'fixed',
           top: HEADER,
-          bottom: FOOTER,   // respeta el espacio del BottomNav
+          bottom: FOOTER,
           left: '30vw',
           right: 0,
           bgcolor: 'grey.800',
           overflowY: 'auto',
-          zIndex: 900       // menor que Carrito (1000) y BottomNav (1400)
+          zIndex: 900
         }}
       >
         {/* Categorías */}
@@ -349,6 +371,30 @@ export default function ProductosPOS() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseEditCats} variant="contained">Guardar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialogo de selección de serie */}
+      <Dialog open={openSerialDialog} onClose={handleCloseSerialDialog}>
+        <DialogTitle>Seleccionar N° de Serie</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {pendingProduct?.nombre}
+          </Typography>
+          <RadioGroup
+            value={selectedSerial}
+            onChange={(e) => setSelectedSerial(e.target.value)}
+          >
+            {(pendingProduct?.seriales || []).map((s, idx) => (
+              <FormControlLabel key={idx} value={s} control={<Radio />} label={s} />
+            ))}
+          </RadioGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseSerialDialog}>Cancelar</Button>
+          <Button variant="contained" onClick={handleConfirmSerial} disabled={!selectedSerial}>
+            Agregar
+          </Button>
         </DialogActions>
       </Dialog>
 
