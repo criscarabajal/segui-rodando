@@ -47,9 +47,9 @@ export default function generarPresupuestoPDF(
     doc.setFontSize(18);
     doc.text("presupuesto", W - M, 60, { align: "right" });
     doc.setFontSize(10);
-    doc.text(`emisión: ${fechaEmision}`, W - M, 75, { align: "right" });
+    doc.text(String(`emisión: ${fechaEmision || ''}`), W - M, 75, { align: "right" });
     if (pedidoNumero) {
-      doc.text(`pedido n°: ${pedidoNumero}`, W - M, 90, { align: "right" });
+      doc.text(String(`pedido n°: ${pedidoNumero}`), W - M, 90, { align: "right" });
     }
     doc.setLineWidth(0.5);
     doc.line(M, 110, W - M, 110);
@@ -57,20 +57,20 @@ export default function generarPresupuestoPDF(
 
   // --- Datos del cliente ---
   const drawClientData = (yStart) => {
+    const nom = String(cliente?.nombre || '');
+    const ape = String(cliente?.apellido || '');
+    const dni = String(cliente?.dni ?? '-');           // ← safe aunque no exista
+    const tel = String(cliente?.telefono || '-');
+    const mail = String(cliente?.correo || '-');
+
     let y = yStart;
     doc.setFontSize(12);
     doc.text("cliente:", M, y);
     doc.setFontSize(10);
-    doc.text(`${cliente.nombre} ${cliente.apellido}`, M + 70, y);
+    doc.text(`${nom}${ape ? ' ' + ape : ''}`, M + 70, y);
+
     y += 16;
-    doc.text("dni:", M, y);
-    doc.text(cliente.dni, M + 70, y);
-    y += 16;
-    doc.text("teléfono:", M, y);
-    doc.text(cliente.telefono || "-", M + 70, y);
-    y += 16;
-    doc.text("email:", M, y);
-    doc.text(cliente.correo || "-", M + 70, y);
+    
     return y + 24;
   };
 
@@ -95,7 +95,7 @@ export default function generarPresupuestoPDF(
       const price = parseFloat(i.precio) || 0;
       const subtotal = qty * price * j;
       const detalleLines = [i.nombre];
-      if (i.incluye) detalleLines.push(...i.incluye.split("\n"));
+      if (i.incluye) detalleLines.push(...String(i.incluye).split("\n"));
       body.push([
         detalleLines.join("\n"),
         qty,
@@ -188,6 +188,8 @@ export default function generarPresupuestoPDF(
   ];
   lines.forEach((ln, i) => doc.text(ln, M, notasY + 12 + i * 12));
 
-  // Guardar
-  doc.save(`${cliente.apellido}_${fechaEmision}.pdf`);
+  // Guardar (usa Pedido N° + Nombre del cliente)
+  const safeNombre = String(cliente?.nombre || 'Cliente').trim().replace(/[\\/:*?"<>|]/g, '_');
+  const safePedido = String(pedidoNumero || '').trim().replace(/[\\/:*?"<>|]/g, '_');
+  doc.save(`PRESUPUESTO_${safePedido}_${safeNombre}.pdf`);
 }

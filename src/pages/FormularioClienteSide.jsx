@@ -16,7 +16,6 @@ export default function FormularioClienteSide() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     nombre: '',   
-    dni: '',
     fechaRetiro: null,
     fechaDevolucion: null,
   });
@@ -33,16 +32,12 @@ export default function FormularioClienteSide() {
   const handleNext = () => {
     const {
       nombre,
-      apellido,
-      dni,
       fechaRetiro,
       fechaDevolucion
     } = formData;
 
     if (
       !nombre ||
-      !apellido ||
-      !dni ||
       !fechaRetiro ||
       !fechaDevolucion
     ) {
@@ -90,25 +85,7 @@ export default function FormularioClienteSide() {
           value={formData.nombre}
           onChange={handleChange}
         />
-        <TextField
-          margin="normal"
-          required
-          fullWidth
-          label="Apellido"
-          name="apellido"
-          value={formData.apellido}
-          onChange={handleChange}
-        />
-        <TextField
-          margin="normal"
-          required
-          fullWidth
-          label="DNI"
-          name="dni"
-          value={formData.dni}
-          onChange={handleChange}
-        />
-       
+             
 
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <DateTimePicker

@@ -1,25 +1,8 @@
 // src/components/ProductosPOS.jsx
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  useMemo
-} from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Box,
-  TextField,
-  MenuItem,
-  Typography,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Grid,
-  InputAdornment,
-  IconButton,
-  useTheme
+  Box, TextField, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
+  Button, InputAdornment, IconButton, useTheme, Alert
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -27,54 +10,56 @@ import Slider from 'react-slick';
 import Carrito from './Carrito';
 import BottomNav from './BottomNav';
 import { fetchProductos } from '../utils/fetchProductos';
-import generarRemitoPDF, { generarNumeroRemito } from '../utils/generarRemito';
-import generarPresupuestoPDF, {
-  generarNumeroPresupuesto
-} from '../utils/generarPresupuesto';
+import generarRemitoPDF from '../utils/generarRemito';
+import generarPresupuestoPDF from '../utils/generarPresupuesto';
+import generarSeguroPDF from '../utils/generarSeguro';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 
 const defaultCats = [
-  'LUCES',
-  'GRIPERIA',
-  'TELAS',
-  'CAMARAS',
-  'LENTES',
-  'BATERIAS',
-  'MONITOREO',
-  'FILTROS',
-  'ACCESORIOS DE CAMARA',
-  'SONIDO'
+  'LUCES','GRIPERIA','TELAS','CAMARAS','LENTES',
+  'BATERIAS','MONITOREO','FILTROS','ACCESORIOS DE CAMARA','SONIDO'
 ];
+
+// helper: ahora en formato "YYYY-MM-DDTHH:MM" para input datetime-local
+const nowLocalDatetime = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mi = pad(d.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+};
 
 export default function ProductosPOS() {
   const theme = useTheme();
-  const HEADER = parseInt(theme.spacing(9), 10);
-  const FOOTER = parseInt(theme.spacing(9), 10);
+  const HEADER = 72;
+  const FOOTER = 72;
+
   const CARD_HEIGHT = 180;
   const ROW_GAP = 16;
   const SLIDES_PER_ROW = 5;
 
-  // inicialización categorías
+  // ===== Pedido / separador =====
+  const [pedidoNumero, setPedidoNumero] = useState('');
+  const [comentario, setComentario] = useState('');
+  const [grupoActual, setGrupoActual] = useState('');
+
+  // ===== Categorías nav (editables) =====
   const [categoriasNav, setCategoriasNav] = useState(() => {
     const saved = localStorage.getItem('categoriasNav');
     return saved ? JSON.parse(saved) : defaultCats;
   });
-  useEffect(() => {
-    localStorage.setItem('categoriasNav', JSON.stringify(categoriasNav));
-  }, [categoriasNav]);
+  useEffect(() => { localStorage.setItem('categoriasNav', JSON.stringify(categoriasNav)); }, [categoriasNav]);
   const [openEditCats, setOpenEditCats] = useState(false);
   const handleOpenEditCats = () => setOpenEditCats(true);
   const handleCloseEditCats = () => setOpenEditCats(false);
-  const handleCatChange = (idx, val) => {
-    setCategoriasNav(cats => {
-      const copy = [...cats];
-      copy[idx] = val;
-      return copy;
-    });
-  };
+  const handleCatChange = (idx, val) =>
+    setCategoriasNav(c => { const cc=[...c]; cc[idx]=val; return cc; });
 
-  // cargar y agrupar productos
+  // ===== Productos (fetch + agrupado por nombre con seriales) =====
   const [productosRaw, setProductosRaw] = useState([]);
   const [productos, setProductos] = useState([]);
   const [isSliding, setIsSliding] = useState(false);
@@ -90,10 +75,15 @@ export default function ProductosPOS() {
               categoria: p.categoria,
               subcategoria: p.subcategoria,
               incluye: p.incluye,
-              seriales: []
+              seriales: [],
+              valorReposicion: p.valorReposicion,
             };
           }
           if (p.serial) acc[p.nombre].seriales.push(p.serial);
+          if (typeof p.valorReposicion === 'number' &&
+              p.valorReposicion > (acc[p.nombre].valorReposicion || 0)) {
+            acc[p.nombre].valorReposicion = p.valorReposicion;
+          }
           return acc;
         }, {});
         setProductos(Object.values(grouped));
@@ -101,22 +91,20 @@ export default function ProductosPOS() {
       .finally(() => setIsSliding(false));
   }, []);
 
-  // filtros
+  // ===== Filtros =====
   const [buscar, setBuscar] = useState('');
   const [favorita, setFavorita] = useState('');
-  const [subcategoria, setSubcategoria] = useState('');
   const [sugerencias, setSugerencias] = useState([]);
   useEffect(() => {
     setSugerencias(
       productos.filter(p =>
         p.nombre.toLowerCase().includes(buscar.toLowerCase()) &&
-        (!favorita || p.categoria === favorita) &&
-        (!subcategoria || p.subcategoria === subcategoria)
+        (!favorita || p.categoria === favorita)
       )
     );
-  }, [productos, buscar, favorita, subcategoria]);
+  }, [productos, buscar, favorita]);
 
-  // slider responsivo
+  // ===== Slider =====
   const [rows, setRows] = useState(1);
   const sliderRef = useRef(null);
   useEffect(() => setIsSliding(false), []);
@@ -129,130 +117,106 @@ export default function ProductosPOS() {
     window.addEventListener('resize', calcularFilas);
     return () => window.removeEventListener('resize', calcularFilas);
   }, [calcularFilas]);
-  useEffect(() => {
-    sliderRef.current?.slickGoTo(0);
-  }, [buscar, favorita, subcategoria, rows, sugerencias.length]);
+  useEffect(() => { sliderRef.current?.slickGoTo(0); }, [buscar, favorita, rows, sugerencias.length]);
   const settings = {
-    arrows: true,
-    infinite: false,
-    rows,
-    slidesPerRow: SLIDES_PER_ROW,
-    slidesToShow: 1,
-    slidesToScroll: 1,
-    speed: 600,
-    cssEase: 'ease-in-out',
+    arrows: true, infinite: false, rows, slidesPerRow: SLIDES_PER_ROW, slidesToShow: 1, slidesToScroll: 1,
+    speed: 600, cssEase: 'ease-in-out',
     beforeChange: (o, n) => o !== n && setIsSliding(true),
     afterChange: () => setIsSliding(false)
   };
 
-  // carrito
-  const [carrito, setCarrito] = useState(() =>
-    JSON.parse(localStorage.getItem('carrito') || '[]')
-  );
-  useEffect(() => {
-    localStorage.setItem('carrito', JSON.stringify(carrito));
-  }, [carrito]);
+  // ===== Carrito =====
+  const [carrito, setCarrito] = useState(() => JSON.parse(localStorage.getItem('carrito') || '[]'));
+  useEffect(() => { localStorage.setItem('carrito', JSON.stringify(carrito)); }, [carrito]);
+
   const agregarAlCarritoConSerial = (prod, serial) => {
-    setCarrito(c => [...c, { ...prod, serial, cantidad: 1 }]);
+    setCarrito(c => [
+      ...c,
+      {
+        ...prod,
+        serial,
+        cantidad: 1,
+        grupo: (grupoActual || '').trim(),
+        valorReposicion: prod.valorReposicion,
+      }
+    ]);
   };
 
-  // diálogo selección de serial
+  // ===== Diálogo de serial =====
   const [openSerialDialog, setOpenSerialDialog] = useState(false);
   const [pendingProduct, setPendingProduct] = useState(null);
-  const handleCardClick = prod => {
+
+  const faltaGrupo = !(grupoActual || '').trim();
+
+  const handleCardClick = (prod) => {
+    if (isSliding) return;
+    if (faltaGrupo) {
+      alert('Primero ingresá un "Día / separador" en el carrito.');
+      return;
+    }
+
+    const seriales = Array.isArray(prod.seriales) ? prod.seriales.filter(Boolean) : [];
+
+    if (seriales.length === 0) {
+      agregarAlCarritoConSerial(prod, '');
+      return;
+    }
+    if (seriales.length === 1) {
+      agregarAlCarritoConSerial(prod, seriales[0]);
+      return;
+    }
+
     setPendingProduct(prod);
     setOpenSerialDialog(true);
   };
-  const handleSelectSerial = serial => {
-    if (pendingProduct) {
-      agregarAlCarritoConSerial(pendingProduct, serial);
-    }
+
+  const handleSelectSerial = (serial) => {
+    if (pendingProduct) agregarAlCarritoConSerial(pendingProduct, serial);
     setOpenSerialDialog(false);
     setPendingProduct(null);
   };
 
-  // jornadas
+  // ===== Jornadas =====
   const [jornadasMap, setJornadasMap] = useState({});
 
-  // diálogo cliente
-  const initialClienteForm = {
-    nombre: '',
-    dni: '',
-    fechaRetiro: '',
-    fechaDevolucion: ''
-  };
+  // ===== Cliente =====
+  // ⬇️ Eliminamos DNI del formulario
+  const initialClienteForm = { nombre: '', fechaRetiro: '', fechaDevolucion: '' };
+
   const [openCliente, setOpenCliente] = useState(false);
-  const handleOpenCliente = () => setOpenCliente(true);
-  const clearClienteForm = () => {
-    setClienteForm(initialClienteForm);
-    setDniInput('');
-    setClientSuggestion('');
-  };
-  const handleCloseCliente = () => {
-    clearClienteForm();
-    setOpenCliente(false);
-  };
   const [clienteForm, setClienteForm] = useState(
     JSON.parse(localStorage.getItem('cliente')) || initialClienteForm
   );
   const [cliente, setCliente] = useState(
     JSON.parse(localStorage.getItem('cliente')) || {}
   );
-  const [dniInput, setDniInput] = useState(clienteForm.dni || '');
-  const [clientSuggestion, setClientSuggestion] = useState('');
-  const [clientes, setClientes] = useState([]);
 
-  useEffect(() => {
-    const sheetId = '1DhpNyUyM-sTHuoucELtaDP3Ul5-JemSrw7uhnhohMZc';
-    const gid = '888837097';
-    fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?gid=${gid}&tq=${encodeURIComponent('SELECT *')}`)
-      .then(r => r.text())
-      .then(txt => {
-        const json = JSON.parse(txt.slice(txt.indexOf('(') + 1, -2));
-        const cols = json.table.cols.map(c => c.label.trim());
-        const idx = {
-          nombre: cols.findIndex(l => /nombre/i.test(l)),
-          apellido: cols.findIndex(l => /apellido/i.test(l)),
-          dni: cols.findIndex(l => /dni/i.test(l)),
-          telefono: cols.findIndex(l => /telefono/i.test(l)),
-          email: cols.findIndex(l => /email/i.test(l))
-        };
-        setClientes(json.table.rows.map(r => ({
-          nombre: r.c[idx.nombre]?.v || '',
-          apellido: r.c[idx.apellido]?.v || '',
-          dni: String(r.c[idx.dni]?.v || ''),
-          telefono: String(r.c[idx.telefono]?.v || ''),
-          correo: r.c[idx.email]?.v || ''
-        })));
-      })
-      .catch(console.error);
-  }, []);
-
-  const handleClientSearch = () => {
-    const clean = dniInput.replace(/\D/g, '');
-    const found = clientes.find(c => c.dni.replace(/\D/g, '') === clean);
-    if (found) {
-      setClientSuggestion(`Coincidencia: ${found.nombre} ${found.apellido}`);
-      // Cargamos lo que venga, aunque nuestro formulario solo guarda algunos campos
-      setClienteForm(prev => ({
-        ...prev,
-        nombre: found.nombre || '',
-        dni: found.dni || ''
-      }));
-    } else {
-      setClientSuggestion('No se encontraron coincidencias');
-    }
+  // al abrir, si no hay fecha de retiro cargada, setear ahora
+  const handleOpenCliente = () => {
+    setClienteForm(prev => ({
+      ...prev,
+      fechaRetiro: prev.fechaRetiro || nowLocalDatetime()
+    }));
+    setOpenCliente(true);
   };
+
+  const clearClienteForm = () => {
+    setClienteForm(initialClienteForm);
+  };
+  const handleCloseCliente = () => {
+    clearClienteForm();
+    setOpenCliente(false);
+  };
+
   const handleClienteChange = e => {
     const { name, value } = e.target;
-    if (name === 'dni') setDniInput(value);
     setClienteForm(prev => ({ ...prev, [name]: value }));
-    setClientSuggestion('');
   };
+
   const handleSaveCliente = () => {
-    const { nombre, dni, fechaRetiro, fechaDevolucion } = clienteForm;
-    if (!nombre || !dni || !fechaRetiro || !fechaDevolucion) {
-      alert('Completá nombre, DNI, fecha de retiro y fecha de devolución');
+    const { nombre, fechaRetiro, fechaDevolucion } = clienteForm;
+    if (!nombre || !fechaRetiro || !fechaDevolucion) {
+      alert('Completá nombre, fecha de retiro y fecha de devolución');
       return;
     }
     localStorage.setItem('cliente', JSON.stringify(clienteForm));
@@ -260,116 +224,71 @@ export default function ProductosPOS() {
     setOpenCliente(false);
   };
 
-  // generar remito/presupuesto
+  // ===== Generar PDFs =====
   const handleGenerarRemito = () => {
-    if (!cliente.nombre) { handleOpenCliente(); return; }
-    const num = generarNumeroRemito();
-    const fecha = new Date().toLocaleDateString('es-AR');
-    generarRemitoPDF(cliente, carrito, num, fecha);
+    if (!cliente?.nombre) { handleOpenCliente(); return; }
+    const nro = String(pedidoNumero || '').trim();
+    if (!nro) { alert('Ingresá un "Pedido N°" en el carrito para generar el Remito.'); return; }
+    generarRemitoPDF(cliente, carrito, nro, nro, jornadasMap, comentario);
   };
+
   const handleGenerarPresupuesto = () => {
-  if (!cliente.nombre) { 
-    handleOpenCliente(); 
-    return; 
-  }
+    if (!cliente?.nombre) { handleOpenCliente(); return; }
+    const nro = String(pedidoNumero || '').trim();
+    if (!nro) { alert('Ingresá un "Pedido N°" en el carrito para generar el Presupuesto.'); return; }
+    const fecha = new Date().toLocaleDateString('es-AR');
+    generarPresupuestoPDF(cliente, carrito, jornadasMap, fecha, nro);
 
-  const num = generarNumeroPresupuesto();
-  const fecha = new Date().toLocaleDateString('es-AR');
+    // limpiar cliente + inputs
+    setClienteForm(initialClienteForm);
+    setCliente({});
+    localStorage.removeItem('cliente');
 
-  generarPresupuestoPDF(cliente, carrito, jornadasMap, num, fecha);
+    // limpiar N° pedido y separador
+    setPedidoNumero('');
+    setComentario('');
+    setGrupoActual('');
+  };
 
-  // 🔹 limpiar datos de cliente al terminar
-  setClienteForm(initialClienteForm);
-  setCliente({});
-  setDniInput('');
-  setClientSuggestion('');
-  localStorage.removeItem('cliente');  // también limpiar storage
-};
-
-  const subcategoriasNav = useMemo(() => {
-    if (!favorita) return [];
-    return Array.from(
-      new Set(
-        productosRaw
-          .filter(p => p.categoria === favorita)
-          .map(p => p.subcategoria)
-          .filter(Boolean)
-      )
-    );
-  }, [productosRaw, favorita]);
+  const handleGenerarSeguro = () => {
+    if (!cliente.nombre) { handleOpenCliente(); return; }
+    const fecha = new Date().toLocaleDateString('es-AR');
+    generarSeguroPDF(cliente, carrito, fecha, pedidoNumero);
+  };
 
   return (
     <Box>
-      {/* HEADER búsqueda */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: HEADER,
-          bgcolor: 'grey.900',
-          display: 'flex',
-          alignItems: 'center',
-          px: 2,
-          zIndex: 1200
-        }}
-      >
+      {/* Header búsqueda */}
+      <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0, height: HEADER, bgcolor: 'grey.900', display: 'flex', alignItems: 'center', px: 2, zIndex: 1200 }}>
         <TextField
-          size="small"
-          variant="outlined"
-          placeholder="Buscar producto"
-          value={buscar}
-          onChange={e => setBuscar(e.target.value)}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <SearchIcon />
-              </InputAdornment>
-            )
-          }}
+          size="small" variant="outlined" placeholder="Buscar producto"
+          value={buscar} onChange={e => setBuscar(e.target.value)}
+          InputProps={{ endAdornment: (<InputAdornment position="end"><SearchIcon /></InputAdornment>) }}
           sx={{ width: '28vw', bgcolor: 'grey.800', borderRadius: 1 }}
         />
       </Box>
 
-      {/* CARRITO */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: HEADER,
-          bottom: FOOTER,
-          left: 0,
-          width: '30vw',
-          p: 2,
-          bgcolor: 'grey.900',
-          overflowY: 'auto',
-          zIndex: 1000
-        }}
-      >
+      {/* Carrito */}
+      <Box sx={{ position: 'fixed', top: HEADER, bottom: FOOTER, left: 0, width: '30vw', p: 2, bgcolor: 'grey.900', overflowY: 'auto', zIndex: 1000 }}>
         <Carrito
           productosSeleccionados={carrito}
-          onIncrementar={i => {
-            const c = [...carrito]; c[i].cantidad++; setCarrito(c);
-          }}
-          onDecrementar={i => {
-            const c = [...carrito]; if (c[i].cantidad > 1) c[i].cantidad--; setCarrito(c);
-          }}
-          onCantidadChange={(i, v) => {
-            const c = [...carrito]; c[i].cantidad = v === '' ? '' : Math.max(1, parseInt(v, 10)); setCarrito(c);
-          }}
-          onEliminar={i => {
-            const c = [...carrito]; c.splice(i, 1); setCarrito(c);
-          }}
-          total={0}
+          onIncrementar={i => { const c=[...carrito]; c[i].cantidad++; setCarrito(c); }}
+          onDecrementar={i => { const c=[...carrito]; if (c[i].cantidad>1) c[i].cantidad--; setCarrito(c); }}
+          onCantidadChange={(i,v) => { const c=[...carrito]; c[i].cantidad = v===''? '' : Math.max(1, parseInt(v,10)); setCarrito(c); }}
+          onEliminar={i => { const c=[...carrito]; c.splice(i,1); setCarrito(c); }}
           jornadasMap={jornadasMap}
           setJornadasMap={setJornadasMap}
-          comentario=""
-          setComentario={() => {}}
+          comentario={comentario}
+          setComentario={setComentario}
+          pedidoNumero={pedidoNumero}
+          setPedidoNumero={setPedidoNumero}
+          grupoActual={grupoActual}
+          setGrupoActual={setGrupoActual}
           onClearAll={() => setCarrito([])}
         />
       </Box>
 
-      {/* PRODUCTOS + FILTROS */}
+      {/* Productos + filtros */}
       <Box
         sx={{
           position: 'fixed',
@@ -378,71 +297,65 @@ export default function ProductosPOS() {
           left: '30vw',
           right: 0,
           bgcolor: 'grey.800',
-          overflowY: 'auto'
+          overflowY: 'auto',
+          zIndex: 900
         }}
       >
-        {/* filtros categorías */}
+        {/* Categorías */}
         <Box sx={{ position: 'sticky', top: 0, zIndex: 1300, px: 1, py: 1, bgcolor: 'grey.800' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: favorita ? 1 : 0 }}>
-            <Button size="small"
+          {!(grupoActual || '').trim() && (
+            <Alert severity="info" variant="outlined" sx={{ mb: 1 }}>
+              Ingresá un <strong>Día / separador</strong> en el carrito para poder agregar productos.
+            </Alert>
+          )}
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              size="small"
               variant={!favorita ? 'contained' : 'outlined'}
-              onClick={() => { setFavorita(''); setSubcategoria(''); }}
-            >Todas</Button>
+              onClick={() => setFavorita('')}
+            >
+              TODAS
+            </Button>
+
             {categoriasNav.map((cat, i) => (
-              <Button key={i} size="small"
+              <Button
+                key={i}
+                size="small"
                 variant={favorita === cat ? 'contained' : 'outlined'}
-                onClick={() => { setFavorita(favorita === cat ? '' : cat); setSubcategoria(''); }}
-              >{cat}</Button>
+                onClick={() => setFavorita(favorita === cat ? '' : cat)}
+              >
+                {cat}
+              </Button>
             ))}
+
             <IconButton size="small" sx={{ ml: 'auto' }} onClick={handleOpenEditCats}>
               <MoreVertIcon sx={{ color: '#fff' }} />
             </IconButton>
           </Box>
-          {subcategoriasNav.length > 0 && (
-            <Box sx={{
-              display: 'flex', gap: 1, flexWrap: 'wrap',
-              px: 1, py: 0.5,
-              bgcolor: 'grey.700',
-              borderLeft: `4px solid ${theme.palette.primary.main}`
-            }}>
-              <Button size="small"
-                variant={!subcategoria ? 'contained' : 'outlined'}
-                onClick={() => setSubcategoria('')}
-              >Todas</Button>
-              {subcategoriasNav.map((sub, idx) => (
-                <Button key={idx} size="small"
-                  variant={subcategoria === sub ? 'contained' : 'outlined'}
-                  onClick={() => setSubcategoria(sub)}
-                >{sub}</Button>
-              ))}
-            </Box>
-          )}
         </Box>
 
         {/* Slider de productos */}
         <Slider ref={sliderRef} {...settings}>
           {sugerencias.map((p, i) => (
             <Box key={i} sx={{ px: 1, pb: `${ROW_GAP}px` }}>
-              <Box onClick={e => {
-                if (isSliding) { e.preventDefault(); e.stopPropagation(); return; }
-                handleCardClick(p);
-              }} sx={{
-                height: CARD_HEIGHT,
-                bgcolor: 'grey.700',
-                borderRadius: 1,
-                p: 1.5,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                cursor: isSliding ? 'default' : 'pointer',
-                '&:hover': { bgcolor: !isSliding ? 'grey.600' : 'grey.700' }
-              }}>
-                <Typography variant="subtitle1" sx={{
-                  fontWeight: 600,
-                  lineHeight: 1.2,
-                  whiteSpace: 'normal',
-                  wordBreak: 'break-word'
-                }}>{p.nombre}</Typography>
+              <Box
+                onClick={() => handleCardClick(p)}
+                sx={{
+                  height: CARD_HEIGHT,
+                  bgcolor: 'grey.700',
+                  borderRadius: 1,
+                  p: 1.5,
+                  display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                  cursor: (isSliding || !(grupoActual || '').trim()) ? 'not-allowed' : 'pointer',
+                  opacity: !(grupoActual || '').trim() ? 0.6 : 1,
+                  pointerEvents: isSliding ? 'none' : 'auto',
+                  '&:hover': { bgcolor: !(isSliding || !(grupoActual || '').trim()) ? 'grey.600' : 'grey.700' }
+                }}
+              >
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                  {p.nombre}
+                </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 500 }}>
                   ${(parseFloat(p.precio) || 0).toFixed(2)}
                 </Typography>
@@ -452,12 +365,59 @@ export default function ProductosPOS() {
         </Slider>
       </Box>
 
-      {/* editar categorías */}
+      {/* === Diálogo: Datos del cliente (sin DNI) === */}
+      <Dialog open={openCliente} onClose={handleCloseCliente} maxWidth="sm" fullWidth>
+        <DialogTitle>Datos del cliente</DialogTitle>
+        <DialogContent dividers sx={{ pt: 2 }}>
+          <Box sx={{ display: 'grid', gap: 2 }}>
+            <TextField
+              label="Nombre"
+              name="nombre"
+              value={clienteForm.nombre}
+              onChange={handleClienteChange}
+              size="small"
+              fullWidth
+            />
+
+            <TextField
+              label="Fecha de retiro"
+              name="fechaRetiro"
+              type="datetime-local"
+              InputLabelProps={{ shrink: true }}
+              value={clienteForm.fechaRetiro}
+              onChange={handleClienteChange}
+              size="small"
+              fullWidth
+            />
+
+            <TextField
+              label="Fecha de devolución"
+              name="fechaDevolucion"
+              type="datetime-local"
+              InputLabelProps={{ shrink: true }}
+              value={clienteForm.fechaDevolucion}
+              onChange={handleClienteChange}
+              size="small"
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseCliente}>Cancelar</Button>
+          <Button variant="contained" onClick={handleSaveCliente}>Guardar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Editar categorías */}
       <Dialog open={openEditCats} onClose={handleCloseEditCats}>
         <DialogTitle>Editar categorías</DialogTitle>
         <DialogContent>
           {categoriasNav.map((cat, idx) => (
-            <TextField key={idx} fullWidth size="small" variant="outlined"
+            <TextField
+              key={idx}
+              fullWidth
+              size="small"
+              variant="outlined"
               label={`Categoría ${idx + 1}`}
               value={cat}
               onChange={e => handleCatChange(idx, e.target.value)}
@@ -470,125 +430,13 @@ export default function ProductosPOS() {
         </DialogActions>
       </Dialog>
 
-      {/* seleccionar serial */}
-      <Dialog open={openSerialDialog} onClose={() => setOpenSerialDialog(false)}>
-        <DialogTitle>Seleccionar serial</DialogTitle>
-        <DialogContent>
-          {pendingProduct?.seriales?.map((s, idx) => (
-            <MenuItem key={idx} onClick={() => handleSelectSerial(s)}>{s}</MenuItem>
-          ))}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenSerialDialog(false)}>Cancelar</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Datos Cliente */}
-      <Dialog open={openCliente} onClose={handleCloseCliente} fullWidth maxWidth="md">
-        <DialogTitle sx={{ pb: 2 }}>
-          Datos del Cliente
-        </DialogTitle>
-
-        <DialogContent sx={{ bgcolor: 'grey.900', color: '#fff', p: 3 }}>
-          <Grid container spacing={3} sx={{ mt: 4 }}>
-            {/* NOMBRE */}
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                size="small"
-                variant="outlined"
-                name="nombre"
-                label="Nombre"
-                value={clienteForm.nombre || ''}
-                onChange={handleClienteChange}
-                sx={{ bgcolor: 'grey.800', borderRadius: 1 }}
-              />
-            </Grid>
-
-            {/* DNI */}
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                size="small"
-                variant="outlined"
-                name="dni"
-                label="DNI"
-                value={dniInput}
-                onChange={e => { setDniInput(e.target.value); handleClienteChange(e); }}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={handleClientSearch}><SearchIcon/></IconButton>
-                    </InputAdornment>
-                  )
-                }}
-                sx={{ bgcolor: 'grey.800', borderRadius: 1 }}
-              />
-              {clientSuggestion && (
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: clientSuggestion.startsWith('Coincidencia') ? 'success.main' : 'error.main',
-                    display: 'block',
-                    mt: 0.5
-                  }}
-                >
-                  {clientSuggestion}
-                </Typography>
-              )}
-            </Grid>
-
-            {/* FECHA RETIRO */}
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                size="small"
-                variant="outlined"
-                name="fechaRetiro"
-                label="Fecha Retiro"
-                type="datetime-local"
-                InputLabelProps={{ shrink: true }}
-                value={clienteForm.fechaRetiro || ''}
-                onChange={handleClienteChange}
-                sx={{ bgcolor: 'grey.800', borderRadius: 1 }}
-              />
-            </Grid>
-
-            {/* FECHA DEVOLUCIÓN */}
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                size="small"
-                variant="outlined"
-                name="fechaDevolucion"
-                label="Fecha Devolución"
-                type="datetime-local"
-                InputLabelProps={{ shrink: true }}
-                value={clienteForm.fechaDevolucion || ''}
-                onChange={handleClienteChange}
-                sx={{ bgcolor: 'grey.800', borderRadius: 1 }}
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-
-        <DialogActions sx={{ bgcolor: 'grey.900', px: 3, pb: 2 }}>
-          <Button color="error" onClick={clearClienteForm}>
-            Borrar todo
-          </Button>
-          <Button onClick={handleCloseCliente}>Cancelar</Button>
-          <Button variant="contained" onClick={handleSaveCliente}>
-            Confirmar
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* NAVBAR INFERIOR */}
+      {/* Bottom bar */}
       <BottomNav
         onOpenCliente={handleOpenCliente}
         onGenerarRemito={handleGenerarRemito}
         onGenerarPresupuesto={handleGenerarPresupuesto}
         onCancelar={() => setCarrito([])}
+        onOpenSeguros={handleGenerarSeguro}
       />
     </Box>
   );

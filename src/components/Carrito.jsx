@@ -1,20 +1,8 @@
 // src/components/Carrito.jsx
 import React, { useEffect, useState } from 'react';
 import {
-  Box,
-  Typography,
-  TextField,
-  IconButton,
-  List,
-  ListItem,
-  Divider,
-  Paper,
-  Button,
-  MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions
+  Box, Typography, TextField, IconButton, List, ListItem, Divider,
+  Paper, Button, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import { Add, Remove, Delete, MoreVert } from '@mui/icons-material';
 
@@ -26,30 +14,29 @@ export default function Carrito({
   onEliminar = () => {},
   jornadasMap = {},
   setJornadasMap = () => {},
-  comentario = '',           // ← viene del padre
-  setComentario = () => {},  // ← viene del padre
+  comentario = '',
+  setComentario = () => {},
   pedidoNumero = '',
   setPedidoNumero = () => {},
   onClearAll = () => {},
-  // 🔹 grupo actual (día/etiqueta) controlado por el padre
+  // grupo activo (día/separador) administrado por el padre
   grupoActual = '',
   setGrupoActual
 }) {
-  // ✅ Envoltorio seguro (no rompe si no te pasan la función)
   const safeSetGrupoActual = typeof setGrupoActual === 'function' ? setGrupoActual : () => {};
 
   const [discount, setDiscount] = useState('0');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [openIncludes, setOpenIncludes] = useState(false);
   const [serialMap, setSerialMap] = useState({});
-  const [massJornadas, setMassJornadas] = useState(''); // para aplicar a todas
+  const [massJornadas, setMassJornadas] = useState('');
 
-  // Guardar descuento
+  // persistir descuento
   useEffect(() => {
     localStorage.setItem('descuento', JSON.stringify(appliedDiscount));
   }, [appliedDiscount]);
 
-  // Inicializar serialMap al abrir detalles
+  // inicializar serialMap al abrir detalles
   useEffect(() => {
     if (!openIncludes) return;
     const init = {};
@@ -61,11 +48,12 @@ export default function Carrito({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openIncludes, productosSeleccionados]);
 
-  // 🔹 Al escribir en el input, el texto pasa a ser el grupo activo automáticamente
+  // sincroniza el texto del input con el grupo activo
   useEffect(() => {
     const v = (comentario || '').trim();
-    safeSetGrupoActual(v); // si está vacío, no hay grupo activo
-  }, [comentario]); // (no agrego safeSetGrupoActual para evitar re-disparos innecesarios)
+    safeSetGrupoActual(v); // si está vacío, deja de etiquetar los próximos items
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comentario]);
 
   const handleApplyDiscount = () => {
     if (discount === 'especial') {
@@ -82,7 +70,7 @@ export default function Carrito({
 
   const handleAccept = () => setOpenIncludes(false);
 
-  // ✅ helpers para jornadas masivas
+  // jornadas masivas
   const bumpAllJornadas = (delta) => {
     setJornadasMap(prev => {
       const next = { ...prev };
@@ -102,7 +90,7 @@ export default function Carrito({
     });
   };
 
-  // Cálculo de totales
+  // totales
   const totalConJornadas = productosSeleccionados.reduce((sum, item, idx) => {
     const qty = parseInt(item.cantidad, 10) || 0;
     const j = parseInt(jornadasMap[idx], 10) || 1;
@@ -129,7 +117,7 @@ export default function Carrito({
         fontSize: '0.875rem'
       }}
     >
-      {/* Header pedido */}
+      {/* Header pedido / separador */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <Typography variant="h6" sx={{ fontSize: '1rem', whiteSpace: 'nowrap' }}>
           Pedido N°
@@ -148,7 +136,6 @@ export default function Carrito({
           }}
         />
 
-        {/* Comentario arriba de todo */}
         <TextField
           size="small"
           placeholder="Día / separador… (ej: Lunes)"
@@ -165,15 +152,10 @@ export default function Carrito({
           inputProps={{ maxLength: 200 }}
         />
 
-        {/* (Opcional) Aceptar del header: también cierra el día actual */}
         <Button
           variant="contained"
           size="small"
-          onClick={() => {
-            // cerrar el día activo y limpiar input
-            safeSetGrupoActual('');
-            setComentario('');
-          }}
+          onClick={() => { safeSetGrupoActual(''); setComentario(''); }}
           disabled={!String(grupoActual || '').trim()}
         >
           Aceptar
@@ -186,7 +168,7 @@ export default function Carrito({
 
       {/* Lista de ítems */}
       <List sx={{ flex: 1, overflowY: 'auto' }}>
-        {/* 🔹 separador “activo” apenas escribís el día, con botón Aceptar al lado */}
+        {/* Separador “activo” (mientras hay grupoActual) */}
         {String(grupoActual || '').trim() && (
           <Box key="sep-actual" sx={{ position: 'sticky', top: 0, zIndex: 1, bgcolor: '#1e1e1e' }}>
             <Divider textAlign="left" sx={{ my: 1, '&::before, &::after': { borderColor: '#555' } }}>
@@ -213,11 +195,7 @@ export default function Carrito({
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => {
-                    // cerrar el día actual: limpiar grupo activo y el input
-                    safeSetGrupoActual('');
-                    setComentario('');
-                  }}
+                  onClick={() => { safeSetGrupoActual(''); setComentario(''); }}
                 >
                   Aceptar
                 </Button>
@@ -227,7 +205,7 @@ export default function Carrito({
         )}
 
         {(() => {
-          // 👇 arrancamos 'lastGrupo' con el grupo activo para NO duplicar separador
+          // Evita duplicar el separador si el primero coincide con el grupo activo
           let lastGrupo = String(grupoActual || '').trim() || null;
 
           return ordenados.flatMap(({ p: item, i: idx }) => {
@@ -324,10 +302,7 @@ export default function Carrito({
       {/* Descuento / borrar */}
       <Box mt={2} display="flex" flexDirection="column" gap={1}>
         <TextField
-          select
-          label="Descuento"
-          size="small"
-          value={discount}
+          select label="Descuento" size="small" value={discount}
           onChange={e => setDiscount(e.target.value)}
           sx={{ bgcolor: '#2c2c2c', borderRadius: 1 }}
         >
@@ -337,18 +312,10 @@ export default function Carrito({
           <MenuItem value="25">25%</MenuItem>
           <MenuItem value="especial">Especial</MenuItem>
         </TextField>
-        <Button variant="contained" size="small" onClick={handleApplyDiscount}>
-          Aplicar descuento
-        </Button>
+        <Button variant="contained" size="small" onClick={handleApplyDiscount}>Aplicar descuento</Button>
         <Button
-          variant="outlined"
-          color="error"
-          size="small"
-          onClick={() => {
-            if (window.confirm("¿Seguro que desea borrar todo?")) {
-              onClearAll();
-            }
-          }}
+          variant="outlined" color="error" size="small"
+          onClick={() => { if (window.confirm('¿Seguro que desea borrar todo?')) onClearAll(); }}
         >
           Borrar todo
         </Button>
@@ -360,64 +327,30 @@ export default function Carrito({
         <DialogContent dividers sx={{ overflowY: 'auto' }}>
           {productosSeleccionados.length ? (
             <>
-              {/* 🔹 Controles masivos de jornadas */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  mb: 2,
-                  p: 1,
-                  border: '1px dashed #666',
-                  borderRadius: 1,
-                  bgcolor: '#222'
-                }}
-              >
+              {/* Jornadas masivas */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, p: 1, border: '1px dashed #666', borderRadius: 1, bgcolor: '#222' }}>
                 <Typography sx={{ mr: 1, fontWeight: 600 }}>Jornadas (todas):</Typography>
-
-                <IconButton size="small" onClick={() => bumpAllJornadas(-1)}>
-                  <Remove fontSize="small" />
-                </IconButton>
-
+                <IconButton size="small" onClick={() => bumpAllJornadas(-1)}><Remove fontSize="small" /></IconButton>
                 <TextField
-                  size="small"
-                  type="number"
-                  value={massJornadas}
+                  size="small" type="number" value={massJornadas}
                   onChange={(e) => setMassJornadas(e.target.value)}
                   inputProps={{ min: 1, style: { textAlign: 'center', width: 70 } }}
-                  sx={{ bgcolor: '#1e1e1e', borderRadius: 1 }}
-                  placeholder="n°"
+                  sx={{ bgcolor: '#1e1e1e', borderRadius: 1 }} placeholder="n°"
                 />
-
-                <IconButton size="small" onClick={() => bumpAllJornadas(1)}>
-                  <Add fontSize="small" />
-                </IconButton>
-
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => applyAllJornadas(massJornadas)}
-                  sx={{ ml: 'auto' }}
-                >
-                  Aplicar a todas
-                </Button>
+                <IconButton size="small" onClick={() => bumpAllJornadas(1)}><Add fontSize="small" /></IconButton>
+                <Button size="small" variant="contained" onClick={() => applyAllJornadas(massJornadas)} sx={{ ml: 'auto' }}>Aplicar a todas</Button>
               </Box>
 
-              {/* === LISTADO AGRUPADO POR DÍA (SIN '||=') === */}
+              {/* Agrupado por grupo/día */}
               {(() => {
                 const normalizar = (s) => String(s || '').trim();
-                // mantener índice original
                 const items = productosSeleccionados.map((it, idx) => ({ it, idx }));
-
-                // agrupar
                 const grupos = {};
                 items.forEach((x) => {
                   const g = normalizar(x.it.grupo) || 'Sin grupo';
                   if (!grupos[g]) grupos[g] = [];
                   grupos[g].push(x);
                 });
-
-                // ordenar: con nombre primero, "Sin grupo" último
                 const ordenGrupos = Object.keys(grupos).sort((a, b) => {
                   if (a === 'Sin grupo' && b !== 'Sin grupo') return 1;
                   if (b === 'Sin grupo' && a !== 'Sin grupo') return -1;
@@ -430,17 +363,9 @@ export default function Carrito({
                       <Divider textAlign="left" sx={{ my: 1, '&::before, &::after': { borderColor: '#555' } }}>
                         <Typography
                           sx={{
-                            fontWeight: 700,
-                            fontSize: '0.9rem',
-                            px: 1,
-                            py: 0.5,
-                            bgcolor: '#333',
-                            borderRadius: 1,
-                            display: 'inline-block',
-                            maxWidth: '100%',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
+                            fontWeight: 700, fontSize: '0.9rem', px: 1, py: 0.5,
+                            bgcolor: '#333', borderRadius: 1, display: 'inline-block',
+                            maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                           }}
                           title={gName}
                         >
@@ -456,67 +381,35 @@ export default function Carrito({
                       <Box
                         key={`row-${gName}-${idx}`}
                         sx={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr auto auto', // Detalle | Cantidad | Jornadas
-                          columnGap: 2,
-                          alignItems: 'center',
-                          mb: 2,
-                          p: 1,
-                          border: '1px solid #444',
-                          borderRadius: 1,
-                          bgcolor: '#2a2a2a'
+                          display: 'grid', gridTemplateColumns: '1fr auto auto', columnGap: 2,
+                          alignItems: 'center', mb: 2, p: 1, border: '1px solid #444', borderRadius: 1, bgcolor: '#2a2a2a'
                         }}
                       >
-                        {/* Detalle */}
                         <Box>
                           <Typography fontWeight={600}>{item.nombre}</Typography>
                           <Typography variant="body2">{item.incluye || 'Sin info.'}</Typography>
                         </Box>
 
-                        {/* Cantidad (editable) */}
                         <Box display="flex" flexDirection="column" alignItems="center">
                           <Typography variant="caption" color="gray">Cantidad</Typography>
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 0.5,
-                              border: '1px dashed gray',
-                              borderRadius: 1,
-                              p: '2px 4px',
-                              bgcolor: '#1e1e1e'
-                            }}
-                          >
-                            <IconButton size="small" onClick={() => onDecrementar(idx)}>
-                              <Remove fontSize="small" />
-                            </IconButton>
-
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px dashed gray', borderRadius: 1, p: '2px 4px', bgcolor: '#1e1e1e' }}>
+                            <IconButton size="small" onClick={() => onDecrementar(idx)}><Remove fontSize="small" /></IconButton>
                             <TextField
-                              size="small"
-                              type="number"
-                              value={item.cantidad}
+                              size="small" type="number" value={item.cantidad}
                               onChange={(e) => onCantidadChange(idx, e.target.value)}
                               inputProps={{ min: 1, style: { textAlign: 'center', width: 48 } }}
                               sx={{ bgcolor: '#2c2c2c', borderRadius: 1 }}
                             />
-
-                            <IconButton size="small" onClick={() => onIncrementar(idx)}>
-                              <Add fontSize="small" />
-                            </IconButton>
+                            <IconButton size="small" onClick={() => onIncrementar(idx)}><Add fontSize="small" /></IconButton>
                           </Box>
                         </Box>
 
-                        {/* Jornadas (editable) */}
                         <Box display="flex" flexDirection="column" alignItems="center">
                           <Typography variant="caption" color="gray">Jornadas</Typography>
                           <Box display="flex" alignItems="center" sx={{ border: '1px dashed gray', borderRadius: 1, p: '2px 4px', bgcolor:'#1e1e1e' }}>
-                            <IconButton size="small" onClick={() =>
-                              setJornadasMap(prev => ({ ...prev, [idx]: Math.max(1, (prev[idx]||1)-1) }))
-                            }><Remove fontSize="small" /></IconButton>
+                            <IconButton size="small" onClick={() => setJornadasMap(prev => ({ ...prev, [idx]: Math.max(1, (prev[idx]||1)-1) }))}><Remove fontSize="small" /></IconButton>
                             <Typography mx={0.5}>{j}</Typography>
-                            <IconButton size="small" onClick={() =>
-                              setJornadasMap(prev => ({ ...prev, [idx]: (prev[idx]||1)+1 }))
-                            }><Add fontSize="small" /></IconButton>
+                            <IconButton size="small" onClick={() => setJornadasMap(prev => ({ ...prev, [idx]: (prev[idx]||1)+1 }))}><Add fontSize="small" /></IconButton>
                           </Box>
                         </Box>
                       </Box>
