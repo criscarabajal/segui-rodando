@@ -25,6 +25,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import Slider from 'react-slick';
 import Carrito from './Carrito';
 import BottomNav from './BottomNav';
+import ListaPedidosModal from './ListaPedidosModal';
 import { fetchProductos } from '../utils/fetchProductos';
 import generarRemitoPDF from '../utils/generarRemito';
 import generarPresupuestoPDF from '../utils/generarPresupuesto';
@@ -53,6 +54,10 @@ const defaultCats = [
 
 export default function ProductosPOS({ usuario }) {
 
+  // ===== Descuento =====
+  const [discount, setDiscount] = useState('0');
+  const [appliedDiscount, setAppliedDiscount] = useState(0);
+
   const handleGuardarPedido = async () => {
     const nro = String(pedidoNumero || "").trim();
     if (!nro) {
@@ -63,6 +68,16 @@ export default function ProductosPOS({ usuario }) {
       alert("El carrito está vacío.");
       return;
     }
+
+    // Calcular total para guardar
+    const totalConJornadas = carrito.reduce((sum, item, idx) => {
+      const qty = parseInt(item.cantidad, 10) || 0;
+      const j = parseInt(jornadasMap[idx], 10) || 1;
+      const price = parseFloat(item.precio) || 0;
+      return sum + qty * price * j;
+    }, 0);
+    const totalFinal = totalConJornadas * (1 - appliedDiscount / 100);
+
     try {
       await guardarPedidoFirebase({
         pedidoNumero: nro,
@@ -70,6 +85,9 @@ export default function ProductosPOS({ usuario }) {
         carrito,
         jornadasMap,
         usuario,
+        descuento: appliedDiscount, // Guardamos el valor numérico
+        descuentoLabel: discount,   // Guardamos la selección del UI (opcional)
+        totalFinal,                 // Guardamos el total calculado
       });
       alert("Pedido guardado correctamente ☁️");
     } catch (err) {
@@ -93,12 +111,31 @@ export default function ProductosPOS({ usuario }) {
       setClienteForm(data.cliente || initialClienteForm);
       setCarrito(data.carrito || []);
       setJornadasMap(data.jornadasMap || {});
+      setAppliedDiscount(data.descuento || 0);
+      setDiscount(data.descuentoLabel || '0');
       setGrupoActual("");
       alert("Pedido cargado correctamente ✅");
     } catch (err) {
       console.error(err);
       alert("Error al cargar el pedido. Ver consola.");
     }
+  };
+
+  // ===== Lista de pedidos Modal =====
+  const [openListaPedidos, setOpenListaPedidos] = useState(false);
+  const handleOpenListaPedidos = () => setOpenListaPedidos(true);
+  const handleCloseListaPedidos = () => setOpenListaPedidos(false);
+
+  const handleSeleccionarPedidoDesdeLista = (pedido) => {
+    if (!pedido) return;
+    setPedidoNumero(pedido.pedidoNumero || "");
+    setClienteForm(pedido.cliente || initialClienteForm);
+    setCarrito(pedido.carrito || []);
+    setJornadasMap(pedido.jornadasMap || {});
+    setAppliedDiscount(pedido.descuento || 0);
+    setDiscount(pedido.descuentoLabel || '0');
+    setGrupoActual("");
+    // alert("Pedido cargado correctamente ✅");
   };
 
   const theme = useTheme();
@@ -548,11 +585,16 @@ export default function ProductosPOS({ usuario }) {
             setJornadasMap={setJornadasMap}
             pedidoNumero={pedidoNumero}
             setPedidoNumero={setPedidoNumero}
-            grupoActual={grupoActual}
             setGrupoActual={setGrupoActual}
+            discount={discount}
+            setDiscount={setDiscount}
+            appliedDiscount={appliedDiscount}
+            setAppliedDiscount={setAppliedDiscount}
             onClearAll={() => {
               setCarrito([]);
               setJornadasMap({});
+              setAppliedDiscount(0);
+              setDiscount('0');
             }}
           />
         </Box>
@@ -733,6 +775,13 @@ export default function ProductosPOS({ usuario }) {
         </DialogActions>
       </Dialog>
 
+      {/* MODAL LISTA PEDIDOS */}
+      <ListaPedidosModal
+        open={openListaPedidos}
+        onClose={handleCloseListaPedidos}
+        onSelectPedido={handleSeleccionarPedidoDesdeLista}
+      />
+
       {/* Footer / BottomNav */}
       <BottomNav
         onOpenCliente={handleOpenCliente}
@@ -741,6 +790,7 @@ export default function ProductosPOS({ usuario }) {
         onGenerarSeguro={handleGenerarSeguro}
         onGuardarPedido={handleGuardarPedido}
         onCargarPedido={handleCargarPedido}
+        onVerTodosPedidos={handleOpenListaPedidos}
         onCancelar={() => {
           if (window.confirm('¿Cancela pedido?')) {
             setCarrito([]);
@@ -749,6 +799,8 @@ export default function ProductosPOS({ usuario }) {
             setPedidoNumero('');
             setJornadasMap({});
             setGrupoActual('');
+            setAppliedDiscount(0);
+            setDiscount('0');
             localStorage.clear();
             window.location.reload();
           }

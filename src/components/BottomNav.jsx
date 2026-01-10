@@ -3,13 +3,14 @@ import React from 'react';
 import { Box, Button } from '@mui/material';
 
 export default function BottomNav({
-  onOpenCliente = () => {},
-  onGenerarRemito = () => {},
-  onGenerarPresupuesto = () => {},
-  onGenerarSeguro = () => {},
-  onCancelar = () => {},
-  onGuardarPedido = () => {},   // 🟦 NUEVO
-  onCargarPedido = () => {},    // 🟨 NUEVO
+  onOpenCliente = () => { },
+  onGenerarRemito = () => { },
+  onGenerarPresupuesto = () => { },
+  onGenerarSeguro = () => { },
+  onCancelar = () => { },
+  onGuardarPedido = () => { },   // 🟦 NUEVO
+  onCargarPedido = () => { },    // 🟨 NUEVO
+  onVerTodosPedidos = () => { }, // 🟩 NUEVO
 }) {
   return (
     <Box
@@ -49,6 +50,16 @@ export default function BottomNav({
         sx={{ whiteSpace: 'nowrap' }}
       >
         Cargar pedido
+      </Button>
+
+      {/* 🟩 Todos los pedidos */}
+      <Button
+        variant="outlined"
+        color="secondary"
+        onClick={onVerTodosPedidos}
+        sx={{ whiteSpace: 'nowrap' }}
+      >
+        Todos los pedidos
       </Button>
 
       {/* Resto de acciones */}

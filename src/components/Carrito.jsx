@@ -29,10 +29,12 @@ export default function Carrito({
   setPedidoNumero,
   grupoActual,
   setGrupoActual,
-  onClearAll
+  onClearAll,
+  discount,
+  setDiscount,
+  appliedDiscount,
+  setAppliedDiscount
 }) {
-  const [discount, setDiscount] = useState('0');
-  const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [openIncludes, setOpenIncludes] = useState(false);
   const [serialMap, setSerialMap] = useState({});
   const [massJornadas, setMassJornadas] = useState('');
