@@ -13,11 +13,16 @@ import {
     Box,
     IconButton,
     Grid,
-    CircularProgress
+    CircularProgress,
+    Tabs,
+    Tab
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DownloadIcon from '@mui/icons-material/Download';
 import { obtenerTodosPedidosFirebase, eliminarPedidoFirebase } from '../services/pedidosService';
+import generarRemitoPDF from '../utils/generarRemito';
+import generarPresupuestoPDF from '../utils/generarPresupuesto';
 
 export default function ListaPedidosModal({ open, onClose, onSelectPedido }) {
     const [pedidos, setPedidos] = useState([]);
@@ -25,6 +30,7 @@ export default function ListaPedidosModal({ open, onClose, onSelectPedido }) {
     const [busqueda, setBusqueda] = useState('');
     const [fechaInicio, setFechaInicio] = useState('');
     const [fechaFin, setFechaFin] = useState('');
+    const [tabValue, setTabValue] = useState(0);
 
     useEffect(() => {
         if (open) {
@@ -54,17 +60,74 @@ export default function ListaPedidosModal({ open, onClose, onSelectPedido }) {
 
     const handleEliminar = async (pedido) => {
         const nro = pedido.pedidoNumero;
-        if (!window.confirm(`¿Estás seguro de querer borrar el pedido N° ${nro}?`)) {
-            return;
+        const tipo = pedido.tipo || 'pedido';
+        const docId = pedido.id; // ID real del documento en Firebase
+
+        // Si es un pedido, preguntar si quiere borrar los relacionados
+        if (tipo === 'pedido') {
+            const confirmar = window.confirm(
+                `¿Seguro que querés borrar el pedido N° ${nro}?\n\nTambién se borrará el remito y presupuesto correspondiente.`
+            );
+
+            if (!confirmar) return;
+
+
+
+            try {
+                // Borrar el pedido
+                await eliminarPedidoFirebase(docId);
+
+                // Borrar relacionados automáticamente
+                try {
+                    await eliminarPedidoFirebase(`${nro}-remito`);
+                } catch (e) {
+                    console.log(`No se encontró remito ${nro}-remito`);
+                }
+                try {
+                    await eliminarPedidoFirebase(`${nro}-presupuesto`);
+                } catch (e) {
+                    console.log(`No se encontró presupuesto ${nro}-presupuesto`);
+                }
+
+                // Actualizar la lista local - filtrar todos los relacionados
+                setPedidos((prev) => prev.filter(p => p.pedidoNumero !== nro));
+
+                alert("Pedido y documentos relacionados eliminados.");
+            } catch (error) {
+                console.error(error);
+                alert("Error al eliminar. Ver consola.");
+            }
+        } else {
+            // Para remitos y presupuestos, confirmación simple
+            if (!window.confirm(`¿Estás seguro de querer borrar este ${tipo} N° ${nro}?`)) {
+                return;
+            }
+            try {
+                await eliminarPedidoFirebase(docId);
+                setPedidos((prev) => prev.filter(p => p.id !== docId));
+                alert(`${tipo.charAt(0).toUpperCase() + tipo.slice(1)} eliminado.`);
+            } catch (error) {
+                console.error(error);
+                alert("Error al eliminar. Ver consola.");
+            }
         }
-        try {
-            await eliminarPedidoFirebase(nro);
-            // Actualizamos localmente
-            setPedidos((prev) => prev.filter(p => p.pedidoNumero !== nro));
-            alert("Pedido eliminado.");
-        } catch (error) {
-            console.error(error);
-            alert("Error al eliminar pedido.");
+    };
+
+    const handleDescargar = (pedido) => {
+        const tipo = pedido.tipo || 'pedido';
+        const clienteParaPDF = { ...pedido.cliente, nombre: (pedido.cliente?.nombre || '').trim() };
+        const nro = String(pedido.pedidoNumero || '').trim();
+        const carrito = pedido.carrito || [];
+        const jornadasMap = pedido.jornadasMap || {};
+
+        if (tipo === 'remito') {
+            generarRemitoPDF(clienteParaPDF, carrito, nro, nro, jornadasMap);
+        } else if (tipo === 'presupuesto') {
+            const fecha = new Date().toLocaleDateString('es-AR');
+            generarPresupuestoPDF(clienteParaPDF, carrito, jornadasMap, fecha, nro);
+        } else {
+            // Para pedidos regulares, generar como remito
+            generarRemitoPDF(clienteParaPDF, carrito, nro, nro, jornadasMap);
         }
     };
 
@@ -96,13 +159,30 @@ export default function ListaPedidosModal({ open, onClose, onSelectPedido }) {
             }
         }
 
-        return matchTexto && matchFecha;
+        // Filtro por tipo según la pestaña seleccionada
+        let matchTipo = true;
+        if (tabValue === 1) {
+            // Pestaña Remitos
+            matchTipo = p.tipo === 'remito';
+        } else if (tabValue === 2) {
+            // Pestaña Presupuestos
+            matchTipo = p.tipo === 'presupuesto';
+        }
+        // tabValue === 0 muestra todos
+
+        return matchTexto && matchFecha && matchTipo;
     });
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-            <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6">Todos los Pedidos</Typography>
+            <DialogTitle sx={{ m: 0, p: 2, pb: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box sx={{ flex: 1 }}>
+                    <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                        <Tab label="Todos los pedidos" />
+                        <Tab label="Remitos" />
+                        <Tab label="Presupuestos" />
+                    </Tabs>
+                </Box>
                 <IconButton onClick={onClose}>
                     <CloseIcon />
                 </IconButton>
@@ -213,6 +293,15 @@ export default function ListaPedidosModal({ open, onClose, onSelectPedido }) {
                                             >
                                                 Cargar
                                             </Button>
+
+                                            <IconButton
+                                                color="primary"
+                                                onClick={() => handleDescargar(p)}
+                                                sx={{ ml: 1 }}
+                                                title="Descargar PDF"
+                                            >
+                                                <DownloadIcon />
+                                            </IconButton>
 
                                             <IconButton
                                                 color="error"

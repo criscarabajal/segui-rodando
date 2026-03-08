@@ -16,20 +16,27 @@ const COLLECTION = "pedidos";
 
 /**
  * Guarda o actualiza un pedido en Firebase
+ * @param {Object} datos - Datos del pedido
+ * @param {string} customId - ID customizado opcional (ej: "12345-remito")
  */
-export async function guardarPedidoFirebase({
-  pedidoNumero,
-  cliente,
-  carrito,
-  jornadasMap,
-  usuario,
-  descuento,
-  descuentoLabel,
-  totalFinal,
-}) {
+export async function guardarPedidoFirebase(datos, customId = null) {
+  const {
+    pedidoNumero,
+    cliente,
+    carrito,
+    jornadasMap,
+    usuario,
+    descuento,
+    descuentoLabel,
+    totalFinal,
+    tipo
+  } = datos;
+
   if (!pedidoNumero) throw new Error("Falta pedidoNumero");
 
-  const ref = doc(db, COLLECTION, String(pedidoNumero));
+  // Usar customId si se proporciona, sino usar pedidoNumero
+  const docId = customId || String(pedidoNumero);
+  const ref = doc(db, COLLECTION, docId);
 
   await setDoc(
     ref,
@@ -42,6 +49,7 @@ export async function guardarPedidoFirebase({
       descuento: descuento || 0,
       descuentoLabel: descuentoLabel || '0',
       totalFinal: totalFinal || 0,
+      tipo: tipo || 'pedido',
       actualizadoEn: serverTimestamp(),
       creadoEn: serverTimestamp(),
     },

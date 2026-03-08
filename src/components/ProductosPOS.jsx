@@ -78,18 +78,23 @@ export default function ProductosPOS({ usuario }) {
     }, 0);
     const totalFinal = totalConJornadas * (1 - appliedDiscount / 100);
 
+    const datosBase = {
+      pedidoNumero: nro,
+      cliente: clienteForm,
+      carrito,
+      jornadasMap,
+      usuario,
+      descuento: appliedDiscount,
+      descuentoLabel: discount,
+      totalFinal,
+    };
+
     try {
-      await guardarPedidoFirebase({
-        pedidoNumero: nro,
-        cliente: clienteForm,
-        carrito,
-        jornadasMap,
-        usuario,
-        descuento: appliedDiscount, // Guardamos el valor numérico
-        descuentoLabel: discount,   // Guardamos la selección del UI (opcional)
-        totalFinal,                 // Guardamos el total calculado
-      });
-      alert("Pedido guardado correctamente ☁️");
+      // Guardar 3 documentos: pedido, remito y presupuesto
+      await guardarPedidoFirebase({ ...datosBase, tipo: 'pedido' }, `${nro}-pedido`);
+      await guardarPedidoFirebase({ ...datosBase, tipo: 'remito' }, `${nro}-remito`);
+      await guardarPedidoFirebase({ ...datosBase, tipo: 'presupuesto' }, `${nro}-presupuesto`);
+      alert("Pedido guardado correctamente (pedido + remito + presupuesto) ☁️");
     } catch (err) {
       console.error(err);
       alert("Error al guardar el pedido. Ver consola.");
@@ -353,12 +358,45 @@ export default function ProductosPOS({ usuario }) {
   };
 
   // ===== Generar PDFs =====
-  const handleGenerarRemito = () => {
+  const handleGenerarRemito = async () => {
     const nro = String(pedidoNumero || '').trim();
     if (!nro) {
       alert('Ingresá un "Pedido N°" en el carrito para generar el Remito.');
       return;
     }
+    if (carrito.length === 0) {
+      alert('El carrito está vacío.');
+      return;
+    }
+
+    // Calcular total para guardar
+    const totalConJornadas = carrito.reduce((sum, item, idx) => {
+      const qty = parseInt(item.cantidad, 10) || 0;
+      const j = parseInt(jornadasMap[idx], 10) || 1;
+      const price = parseFloat(item.precio) || 0;
+      return sum + qty * price * j;
+    }, 0);
+    const totalFinal = totalConJornadas * (1 - appliedDiscount / 100);
+
+    try {
+      // Solo guardar el remito con ID compuesto
+      await guardarPedidoFirebase({
+        pedidoNumero: nro,
+        cliente: clienteForm,
+        carrito,
+        jornadasMap,
+        usuario,
+        descuento: appliedDiscount,
+        descuentoLabel: discount,
+        totalFinal,
+        tipo: 'remito',
+      }, `${nro}-remito`);
+    } catch (error) {
+      console.error(error);
+      alert('Error al guardar el remito en Firebase.');
+      return;
+    }
+
     const clienteParaPDF = { ...clienteForm, nombre: (clienteForm.nombre || '').trim() };
     generarRemitoPDF(clienteParaPDF, carrito, nro, nro, jornadasMap);
   };
@@ -376,16 +414,28 @@ export default function ProductosPOS({ usuario }) {
     const fecha = new Date().toLocaleDateString('es-AR');
     const clienteParaPDF = { ...clienteForm, nombre: (clienteForm.nombre || '').trim() };
 
+    // Calcular total para guardar
+    const totalConJornadas = carrito.reduce((sum, item, idx) => {
+      const qty = parseInt(item.cantidad, 10) || 0;
+      const j = parseInt(jornadasMap[idx], 10) || 1;
+      const price = parseFloat(item.precio) || 0;
+      return sum + qty * price * j;
+    }, 0);
+    const totalFinal = totalConJornadas * (1 - appliedDiscount / 100);
+
     try {
+      // Solo guardar el presupuesto con ID compuesto
       await guardarPedidoFirebase({
         pedidoNumero: nro,
         cliente: clienteForm,
         carrito,
         jornadasMap,
         usuario,
+        descuento: appliedDiscount,
+        descuentoLabel: discount,
+        totalFinal,
         tipo: 'presupuesto',
-        fechaCreacion: new Date().toISOString(),
-      });
+      }, `${nro}-presupuesto`);
     } catch (error) {
       console.error(error);
       alert('Error al guardar el pedido en Firebase.');

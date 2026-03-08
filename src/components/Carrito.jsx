@@ -210,10 +210,12 @@ export default function Carrito({
           </>
         )}
 
-        <Typography fontWeight="bold" mt={1}>
-          Total + IVA (21%): $
-          {totalWithIva.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-        </Typography>
+        {appliedDiscount !== 30 && (
+          <Typography fontWeight="bold" mt={1}>
+            Total + IVA (21%): $
+            {totalWithIva.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </Typography>
+        )}
       </Box>
 
       {/* Descuentos */}
@@ -248,6 +250,7 @@ export default function Carrito({
           <MenuItem value="10">10%</MenuItem>
           <MenuItem value="20">20%</MenuItem>
           <MenuItem value="25">25%</MenuItem>
+          <MenuItem value="30">30% (Efectivo s/factura)</MenuItem>
           <MenuItem value="especial">Especial</MenuItem>
         </TextField>
 
